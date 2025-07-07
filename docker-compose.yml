@@ -1,0 +1,323 @@
+# docker-compose.yml - Version sans frontend pour test backend + monitoring
+services:
+  # ───────────── MICROSERVICES BACKEND ─────────────
+
+  # Service Data (PREMIER - base de données)
+  data-service:
+    build: ./data-service
+    container_name: data-service
+    ports:
+      - "5002:5002"
+      - "9093:9090"
+    environment:
+      - PORT=5002
+      - METRICS_PORT=9090
+      - NODE_ENV=development
+      - MONGO_URI=${MONGO_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - CORS_ORIGIN=http://localhost:3000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5005
+      - FREE_MOBILE_USERNAME=${FREE_MOBILE_USERNAME}
+      - FREE_MOBILE_API_KEY=${FREE_MOBILE_API_KEY}
+      - NOTIFICATION_API_KEY=${NOTIFICATION_API_KEY}
+    volumes:
+      - ./data-service:/app
+      - /app/node_modules
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Service Notification (DEUXIÈME - dépend seulement de data-service)
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "5005:5005"
+      - "9094:9090"
+    environment:
+      - PORT=5005
+      - METRICS_PORT=9090
+      - NODE_ENV=development
+      - MAILJET_API_KEY=${MAILJET_API_KEY}
+      - MAILJET_API_SECRET=${MAILJET_API_SECRET}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - SMS_API_KEY=${SMS_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=http://localhost:3000
+      - FRONTEND_URL=${FRONTEND_URL}
+      - DATA_SERVICE_URL=${DATA_SERVICE_URL}
+      - DATA_SERVICE_URL_DOCKER=http://data-service:5002
+      - EMAIL_FROM_NAME=${EMAIL_FROM_NAME}
+      - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS}
+      - NOTIFICATION_API_KEY=${NOTIFICATION_API_KEY}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
+    volumes:
+      - ./notification-service:/app
+      - /app/node_modules
+    networks:
+      - microservices-network
+    depends_on:
+      - data-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Service AI (TROISIÈME - dépend de data-service)
+  ai-service:
+    build: ./ai-service
+    container_name: ai-service
+    ports:
+      - "5003:5003"
+      - "9091:9090"
+    environment:
+      - PORT=5003
+      - METRICS_PORT=9090
+      - NODE_ENV=development
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WEATHER_API_KEY=${WEATHER_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN}
+      - DATA_SERVICE_URL=http://data-service:5002
+      - FRONTEND_URL=${FRONTEND_URL}
+    volumes:
+      - ./ai-service:/app
+      - /app/node_modules
+    networks:
+      - microservices-network
+    depends_on:
+      - data-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Service Auth (QUATRIÈME - dépend de data-service)
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    ports:
+      - "5001:5001"
+      - "9092:9090"
+    environment:
+      - PORT=5001
+      - METRICS_PORT=9090
+      - NODE_ENV=development
+      - MONGODB_URI=${MONGODB_URI}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+      - FACEBOOK_CLIENT_ID=${FACEBOOK_CLIENT_ID}
+      - FACEBOOK_CLIENT_SECRET=${FACEBOOK_CLIENT_SECRET}
+      - FACEBOOK_CALLBACK_URL=${FACEBOOK_CALLBACK_URL}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - GITHUB_CALLBACK_URL=${GITHUB_CALLBACK_URL}
+      - CORS_ORIGIN=http://localhost:3000
+      - FRONTEND_URL=${FRONTEND_URL}
+      - DATA_SERVICE_URL=${DATA_SERVICE_URL}
+      - DATA_SERVICE_URL_DOCKER=http://data-service:5002
+      - NOTIFICATION_SERVICE_URL_DOCKER=http://notification-service:5005
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN}
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5005
+    volumes:
+      - ./auth-service:/app
+      - /app/node_modules
+    networks:
+      - microservices-network
+    depends_on:
+      - data-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Service Paiement (CINQUIÈME - dépend de notification-service)
+  paiement-service:
+    build: ./paiement-service
+    container_name: paiement-service
+    ports:
+      - "5004:5004"
+      - "9095:9090"
+    environment:
+      - PORT=5004
+      - METRICS_PORT=9090
+      - NODE_ENV=development
+      - MONGODB_URI=${MONGODB_URI}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_PRICE_MONTHLY_ID=${STRIPE_PRICE_MONTHLY_ID}
+      - STRIPE_PRICE_ANNUAL_ID=${STRIPE_PRICE_ANNUAL_ID}
+      - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID}
+      - PAYPAL_CLIENT_SECRET=${PAYPAL_CLIENT_SECRET}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN}
+      - CORS_ORIGINS=http://localhost:3000
+      - MONGO_URI=${MONGO_URI}
+      - CLIENT_URL=${CLIENT_URL}
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL}
+      - NOTIFICATION_API_KEY=${NOTIFICATION_API_KEY}
+    volumes:
+      - ./paiement-service:/app
+      - /app/node_modules
+    networks:
+      - microservices-network
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Service Metrics (API pour le frontend)
+  metrics-service:
+    build: ./metrics-service
+    container_name: metrics-service
+    ports:
+      - "5006:5006"
+      - "9096:9090"
+    environment:
+      - PORT=5006
+      - METRICS_PORT=9090
+      - NODE_ENV=development
+      - PROMETHEUS_URL=http://prometheus:9090
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_API_KEY=${GRAFANA_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGIN=http://localhost:3000
+    volumes:
+      - ./metrics-service:/app
+      - /app/node_modules
+    networks:
+      - microservices-network
+    depends_on:
+      - prometheus
+      - grafana
+      - ai-service
+      - auth-service
+      - data-service
+      - notification-service
+      - paiement-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ───────────── MONITORING STACK ─────────────
+
+  # Prometheus - Collecte des métriques
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./metrics-service/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--log.level=info'
+    networks:
+      - microservices-network
+    depends_on:
+      - ai-service
+      - auth-service
+      - data-service
+      - notification-service
+      - paiement-service
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana - Visualisation des métriques
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3100:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./metrics-service/grafana/provisioning:/etc/grafana/provisioning
+      - ./metrics-service/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    networks:
+      - microservices-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ───────────── DATABASES ─────────────
+
+  # MongoDB pour data-service et paiement-service
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - microservices-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ───────────── VOLUMES PERSISTANTS ─────────────
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  mongodb_data:
+    driver: local
+
+# ───────────── RÉSEAU (utilise le réseau par défaut) ─────────────
+networks:
+  microservices-network:
+    driver: bridge
