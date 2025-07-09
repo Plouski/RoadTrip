@@ -1,40 +1,35 @@
 {
   "name": "notification-service",
   "version": "1.0.0",
-  "description": "",
+  "description": "Service de notifications simplifié pour RoadTrip!",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest --coverage",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
-    "security:audit": "npm audit",
-    "security:check": "npm audit --audit-level high",
-    "docker:build": "docker build -t auth-service .",
-    "docker:run": "docker run -p 5001:5001 --env-file .env auth-service",
-    "health:check": "curl -f http://localhost:5001/health || exit 1"
+    "test": "node test/test.js",
+    "health": "curl -f http://localhost:5005/health || exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "notification",
+    "email",
+    "sms",
+    "roadtrip"
+  ],
+  "author": "RoadTrip! Team",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "axios": "^1.8.4",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
-    "express-rate-limit": "^7.5.0",
-    "firebase-admin": "^13.2.0",
     "helmet": "^8.1.0",
     "nodemailer": "^6.10.0",
-    "nodemailer-mailjet-transport": "^1.0.4",
-    "prom-client": "^15.1.3",
-    "twilio": "^5.5.1",
-    "winston": "^3.17.0"
+    "nodemailer-mailjet-transport": "^1.0.4"
   },
   "devDependencies": {
-    "eslint": "^9.28.0",
     "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

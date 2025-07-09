@@ -1,25 +1,24 @@
 {
   "name": "data-service",
   "version": "1.0.0",
-  "description": "",
+  "description": "Service de données avec intégrations AI, Notification et Payment",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest",
-    "lint": "eslint ."
+    "test": "node test/test.js",
+    "health": "curl -f http://localhost:5002/health || exit 1",
+    "clean": "rm -rf logs/*.log"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["data", "mongodb", "auth", "roadtrip", "microservices"],
+  "author": "RoadTrip! Team",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
     "axios": "^1.9.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
-    "express-rate-limit": "^7.5.0",
     "express-validator": "^7.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
@@ -31,5 +30,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
