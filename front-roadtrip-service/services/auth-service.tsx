@@ -299,7 +299,6 @@ export const AuthService = {
       const urlMap = {
         google: `${OAUTH_URL}/auth/oauth/google`,
         facebook: `${OAUTH_URL}/auth/oauth/facebook/callback`,
-        github: `${OAUTH_URL}/auth/oauth/github`,
       };
 
       const url = urlMap[provider.toLowerCase()];

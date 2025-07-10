@@ -224,7 +224,7 @@ export default function AuthPage(): JSX.Element {
                     <AlertMessage message={alertMessage} type={alertType!} />
                   )}
 
-                  {/* Lignes de séparation et boutons sociaux */}
+                  {/* Séparateur visuel */}
                   <div className="relative w-full">
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t" />
@@ -236,20 +236,23 @@ export default function AuthPage(): JSX.Element {
                     </div>
                   </div>
 
-                  {/* Boutons de connexion sociale */}
-                  <div className="grid grid-cols-3 gap-2">
+                  {/* Boutons sociaux alignés et responsive */}
+                  <div className="grid grid-cols-2 gap-2 w-full">
                     <Button
                       variant="outline"
                       type="button"
                       onClick={() => handleSocialLogin("facebook")}
+                      className="w-full justify-center"
                     >
                       <Facebook className="mr-2 h-4 w-4" />
-                      Fb
+                      Facebook
                     </Button>
+
                     <Button
                       variant="outline"
                       type="button"
                       onClick={() => handleSocialLogin("google")}
+                      className="w-full justify-center"
                     >
                       <svg
                         className="mr-2 h-4 w-4"
@@ -263,14 +266,6 @@ export default function AuthPage(): JSX.Element {
                         <path d="M249 97.5c35.5 0 67.4 12.3 92.6 36.5l69.3-69.3C370.3 27.4 314.3 0 249 0 152.6 0 70.3 47.9 29 119.6l81.5 64.4C130 141 184.6 97.5 249 97.5z" />
                       </svg>
                       Google
-                    </Button>
-                    <Button
-                      variant="outline"
-                      type="button"
-                      onClick={() => handleSocialLogin("github")}
-                    >
-                      <Github className="mr-2 h-4 w-4" />
-                      GitHub
                     </Button>
                   </div>
                 </CardFooter>

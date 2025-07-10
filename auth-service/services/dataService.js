@@ -1,5 +1,4 @@
 const axios = require("axios");
-const logger = require("../utils/logger");
 
 class DataService {
   constructor() {
@@ -34,7 +33,7 @@ class DataService {
 
     this.client.interceptors.request.use(
       (config) => {
-        logger.info(
+        console.log(
           `📡 Requête vers data-service: ${config.method?.toUpperCase()} ${
             config.url
           }`
@@ -42,20 +41,20 @@ class DataService {
         return config;
       },
       (error) => {
-        logger.error("❌ Erreur requête data-service:", error);
+        console.error("❌ Erreur requête data-service:", error);
         return Promise.reject(error);
       }
     );
 
     this.client.interceptors.response.use(
       (response) => {
-        logger.info(
+        console.log(
           `✅ Réponse data-service: ${response.status} ${response.config.url}`
         );
         return response;
       },
       (error) => {
-        logger.error(
+        console.error(
           `❌ Erreur réponse data-service: ${error.response?.status} ${error.config?.url}`,
           {
             message: error.response?.data?.message || error.message,
@@ -82,12 +81,12 @@ class DataService {
         createdAt: new Date(),
       });
 
-      logger.info("👤 Utilisateur créé via data-service", {
+      console.log("👤 Utilisateur créé via data-service", {
         userId: response.data.id,
       });
       return response.data;
     } catch (error) {
-      logger.error(
+      console.error(
         "❌ Erreur création utilisateur:",
         error.response?.data || error.message
       );
@@ -110,7 +109,7 @@ class DataService {
       if (error.response?.status === 404) {
         return null;
       }
-      logger.error(
+      console.error(
         "❌ Erreur recherche utilisateur par email:",
         error.response?.data || error.message
       );
@@ -131,7 +130,7 @@ class DataService {
       if (error.response?.status === 404) {
         return null;
       }
-      logger.error(
+      console.error(
         "❌ Erreur recherche utilisateur par ID:",
         error.response?.data || error.message
       );
@@ -147,10 +146,10 @@ class DataService {
   async updateUser(userId, updateData) {
     try {
       const response = await this.client.put(`/users/${userId}`, updateData);
-      logger.info("📝 Utilisateur mis à jour via data-service", { userId });
+      console.info("📝 Utilisateur mis à jour via data-service", { userId });
       return response.data;
     } catch (error) {
-      logger.error(
+      console.error(
         "❌ Erreur mise à jour utilisateur:",
         error.response?.data || error.message
       );
@@ -168,7 +167,7 @@ class DataService {
       const response = await this.healthClient.get("/health");
       return response.data;
     } catch (error) {
-      logger.error("❌ Data-service non disponible:", error.message);
+      console.error("❌ Data-service non disponible:", error.message);
       throw new Error("Data-service non disponible");
     }
   }
@@ -182,7 +181,7 @@ class DataService {
         service: "auth-service",
       });
     } catch (error) {
-      logger.warn(
+      console.warn(
         "⚠️ Impossible d'enregistrer l'événement auth:",
         error.message
       );
