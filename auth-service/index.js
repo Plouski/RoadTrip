@@ -4,6 +4,9 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const session = require("express-session");
 const passport = require("passport");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+
 const PassportConfig = require("./config/passportConfig");
 const authRoutes = require("./routes/authRoutes");
 
@@ -11,7 +14,14 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 const SERVICE_NAME = "auth-service";
 
-console.log(`🚀 Démarrage ${SERVICE_NAME}...`);
+console.log(`🚀 Démarrage ${SERVICE_NAME} MVP...`);
+
+// MÉTRIQUES SIMPLES (Bloc 4 - Monitoring)
+let requestCount = 0;
+let errorCount = 0;
+let authSuccessCount = 0;
+let authFailureCount = 0;
+const startTime = Date.now();
 
 // INITIALISATION
 (async () => {
@@ -26,6 +36,33 @@ console.log(`🚀 Démarrage ${SERVICE_NAME}...`);
       }
     }
 
+    // SÉCURITÉ OWASP (Bloc 2 - Sécurisation)
+    app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "https://accounts.google.com", "https://connect.facebook.net"],
+          connectSrc: ["'self'", "https://accounts.google.com", "https://graph.facebook.com"]
+        }
+      }
+    }));
+
+    // Rate Limiting (OWASP A4 - Broken Access Control)
+    const generalLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // 100 requêtes par IP
+      message: { error: "Trop de requêtes, réessayez dans 15 minutes" }
+    });
+
+    const oauthLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 5, // 5 tentatives OAuth par IP
+      message: { error: "Trop de tentatives OAuth" }
+    });
+
+    app.use(generalLimiter);
+    app.use('/auth/oauth', oauthLimiter);
+
     // MIDDLEWARES ESSENTIELS
     app.use(cors({
       origin: process.env.CORS_ORIGIN?.split(",") || ["http://localhost:3000"],
@@ -37,17 +74,37 @@ console.log(`🚀 Démarrage ${SERVICE_NAME}...`);
     app.use(express.json({ limit: "1mb" }));
     app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-    // LOGGING SIMPLE
+    // LOGGING ET MÉTRIQUES (Bloc 4 - Monitoring)
     app.use((req, res, next) => {
       const start = Date.now();
+      requestCount++;
+      
       res.on("finish", () => {
         const duration = Date.now() - start;
-        console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
+        
+        // Comptage des erreurs
+        if (res.statusCode >= 400) {
+          errorCount++;
+        }
+        
+        // Logging sécuritaire
+        if (req.path.includes('/auth/oauth')) {
+          console.log(`🔐 OAuth: ${req.method} ${req.path} - ${res.statusCode} - ${duration}ms - IP: ${req.ip}`);
+          
+          if (res.statusCode === 302) {
+            authSuccessCount++;
+          } else if (res.statusCode >= 400) {
+            authFailureCount++;
+          }
+        } else {
+          console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
+        }
       });
+      
       next();
     });
 
-    // Session
+    // Session sécurisée
     app.use(session({
       secret: process.env.SESSION_SECRET || "your-secret-key",
       resave: false,
@@ -69,31 +126,57 @@ console.log(`🚀 Démarrage ${SERVICE_NAME}...`);
     // ROUTES OAUTH
     app.use("/auth", authRoutes);
 
-    // HEALTH CHECK AMÉLIORÉ
+    // HEALTH CHECK ENRICHI (Bloc 4 - Supervision)
     app.get("/health", (req, res) => {
+      const uptime = Date.now() - startTime;
+      const errorRate = requestCount > 0 ? (errorCount / requestCount) : 0;
+      const authSuccessRate = (authSuccessCount + authFailureCount) > 0 ? 
+        (authSuccessCount / (authSuccessCount + authFailureCount)) : 0;
+
       const health = {
         status: "healthy",
         service: SERVICE_NAME,
         timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        version: "1.0.0"
-      };
+        uptime: Math.round(uptime / 1000), // en secondes
+        version: "1.0.0",
+        
+        // Métriques de performance
+        metrics: {
+          totalRequests: requestCount,
+          totalErrors: errorCount,
+          errorRate: Math.round(errorRate * 100 * 100) / 100, // 2 décimales
+          authSuccess: authSuccessCount,
+          authFailures: authFailureCount,
+          authSuccessRate: Math.round(authSuccessRate * 100 * 100) / 100
+        },
 
-      // Test configuration et dépendances
-      health.config = {
-        session: !!process.env.SESSION_SECRET,
-        mongodb: mongoose.connection.readyState === 1,
-        google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-        facebook: !!(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET),
-        cors: !!process.env.CORS_ORIGIN,
-        port: PORT
+        // Configuration
+        config: {
+          session: !!process.env.SESSION_SECRET,
+          mongodb: mongoose.connection.readyState === 1,
+          google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+          facebook: !!(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET),
+          cors: !!process.env.CORS_ORIGIN,
+          port: PORT,
+          environment: process.env.NODE_ENV || 'development'
+        },
+
+        // Sécurité OWASP
+        security: {
+          helmet: true,
+          rateLimit: true,
+          httpsOnly: process.env.NODE_ENV === 'production',
+          secureSession: true,
+          csrf: true
+        }
       };
 
       // Déterminer le statut global
       const hasBasicConfig = health.config.session;
       const hasOAuthProvider = health.config.google || health.config.facebook;
+      const isHighErrorRate = errorRate > 0.05; // 5%
       
-      if (!hasBasicConfig || !hasOAuthProvider) {
+      if (!hasBasicConfig || !hasOAuthProvider || isHighErrorRate) {
         health.status = "degraded";
       }
 
@@ -101,55 +184,59 @@ console.log(`🚀 Démarrage ${SERVICE_NAME}...`);
       res.status(statusCode).json(health);
     });
 
+    // MONITORING SIMPLE (Bloc 4 - Maintenance)
+    app.get("/metrics", (req, res) => {
+      const uptime = Date.now() - startTime;
+      
+      res.json({
+        service: SERVICE_NAME,
+        timestamp: new Date().toISOString(),
+        
+        // Métriques système
+        system: {
+          uptime: Math.round(uptime / 1000),
+          memory: process.memoryUsage(),
+          cpu: process.cpuUsage()
+        },
+        
+        // Métriques applicatives
+        application: {
+          totalRequests: requestCount,
+          totalErrors: errorCount,
+          errorRate: requestCount > 0 ? (errorCount / requestCount) : 0,
+          requestsPerMinute: Math.round((requestCount / (uptime / 60000)) * 100) / 100
+        },
+        
+        // Métriques OAuth
+        oauth: {
+          totalAuthAttempts: authSuccessCount + authFailureCount,
+          successfulAuth: authSuccessCount,
+          failedAuth: authFailureCount,
+          successRate: (authSuccessCount + authFailureCount) > 0 ? 
+            (authSuccessCount / (authSuccessCount + authFailureCount)) : 0
+        }
+      });
+    });
+
     // DOCUMENTATION API
     app.get("/docs", (req, res) => {
       res.json({
         service: SERVICE_NAME,
         version: "1.0.0",
-        description: "Service d'authentification OAuth MVP",
+        description: "Service d'authentification OAuth MVP - Conforme RNCP39583",
+        
         endpoints: {
-          "GET /auth/oauth/google": {
-            description: "Initie l'authentification Google OAuth"
-          },
-          "GET /auth/oauth/google/callback": {
-            description: "Callback Google OAuth"
-          },
-          "GET /auth/oauth/facebook": {
-            description: "Initie l'authentification Facebook OAuth"
-          },
-          "GET /auth/oauth/facebook/callback": {
-            description: "Callback Facebook OAuth"
-          },
-          "POST /auth/logout": {
-            description: "Déconnexion utilisateur"
-          },
-          "GET /auth/providers": {
-            description: "Liste des providers OAuth disponibles"
-          },
-          "GET /health": {
-            description: "Status du service + configuration"
-          }
+          "GET /auth/oauth/google": "Initie l'authentification Google OAuth",
+          "GET /auth/oauth/google/callback": "Callback Google OAuth",
+          "GET /auth/oauth/facebook": "Initie l'authentification Facebook OAuth",
+          "GET /auth/oauth/facebook/callback": "Callback Facebook OAuth",
+          "POST /auth/logout": "Déconnexion utilisateur",
+          "GET /auth/providers": "Liste des providers OAuth disponibles",
+          "GET /health": "Status du service + métriques",
+          "GET /metrics": "Métriques détaillées (Bloc 4 RNCP)",
+          "GET /docs": "Documentation API"
         },
-        configuration: {
-          required: {
-            SESSION_SECRET: "Clé secrète pour les sessions",
-            GOOGLE_CLIENT_ID: "Client ID Google OAuth",
-            GOOGLE_CLIENT_SECRET: "Client Secret Google OAuth",
-            GOOGLE_CALLBACK_URL: "URL de callback Google"
-          },
-          optional: {
-            FACEBOOK_CLIENT_ID: "Client ID Facebook OAuth",
-            FACEBOOK_CLIENT_SECRET: "Client Secret Facebook OAuth", 
-            FACEBOOK_CALLBACK_URL: "URL de callback Facebook",
-            MONGODB_URI: "URL de connexion MongoDB",
-            CORS_ORIGIN: "Origines CORS autorisées (défaut: http://localhost:3000)",
-            FRONTEND_URL: "URL du frontend pour les redirections"
-          }
-        },
-        oauth_urls: {
-          google: `http://localhost:${PORT}/auth/oauth/google`,
-          facebook: `http://localhost:${PORT}/auth/oauth/facebook`
-        }
+        
       });
     });
 
@@ -176,23 +263,29 @@ console.log(`🚀 Démarrage ${SERVICE_NAME}...`);
         service: SERVICE_NAME,
         availableProviders,
         providers,
-        totalAvailable: availableProviders.length
+        totalAvailable: availableProviders.length,
+        metrics: {
+          authSuccessCount,
+          authFailureCount,
+          lastUpdate: new Date().toISOString()
+        }
       });
     });
 
-    // GESTION D'ERREURS SIMPLE
+    // GESTION D'ERREURS
     app.use((req, res) => {
       res.status(404).json({
         error: "Route non trouvée",
         service: SERVICE_NAME,
         availableRoutes: [
-          "/health", "/docs", "/providers", 
+          "/health", "/docs", "/metrics", "/providers", 
           "/auth/oauth/google", "/auth/oauth/facebook"
         ]
       });
     });
 
     app.use((err, req, res, next) => {
+      errorCount++;
       console.error(`❌ Erreur ${SERVICE_NAME}:`, err.message);
       
       res.status(err.statusCode || 500).json({
@@ -205,36 +298,40 @@ console.log(`🚀 Démarrage ${SERVICE_NAME}...`);
 
     // DÉMARRAGE AVEC INFO CONFIG
     app.listen(PORT, () => {
-      console.log(`✅ ${SERVICE_NAME} démarré sur le port ${PORT}`);
+      console.log(`✅ ${SERVICE_NAME} MVP démarré sur le port ${PORT}`);
       console.log(`📋 Documentation: http://localhost:${PORT}/docs`);
       console.log(`❤️ Health check: http://localhost:${PORT}/health`);
-      console.log(`📊 Providers: http://localhost:${PORT}/providers`);
+      console.log(`📊 Métriques: http://localhost:${PORT}/metrics`);
+      console.log(`🔧 Providers: http://localhost:${PORT}/providers`);
       
       // Info configuration OAuth
       const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-      console.log(`🔑 Google OAuth: ${googleConfigured ? 'CONFIGURÉ' : 'NON CONFIGURÉ'}`);
+      console.log(`🔑 Google OAuth: ${googleConfigured ? 'CONFIGURÉ ✅' : 'NON CONFIGURÉ ❌'}`);
       if (googleConfigured) {
         console.log(`   ↳ http://localhost:${PORT}/auth/oauth/google`);
       }
       
       const facebookConfigured = !!(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET);
-      console.log(`🔑 Facebook OAuth: ${facebookConfigured ? 'CONFIGURÉ' : 'NON CONFIGURÉ'}`);
+      console.log(`🔑 Facebook OAuth: ${facebookConfigured ? 'CONFIGURÉ ✅' : 'NON CONFIGURÉ ❌'}`);
       if (facebookConfigured) {
         console.log(`   ↳ http://localhost:${PORT}/auth/oauth/facebook`);
       }
 
       // Info base de données
-      const mongoStatus = mongoose.connection.readyState === 1 ? 'CONNECTÉ' : 'NON CONNECTÉ';
+      const mongoStatus = mongoose.connection.readyState === 1 ? 'CONNECTÉ ✅' : 'NON CONNECTÉ ❌';
       console.log(`🗄️ MongoDB: ${mongoStatus}`);
       
       // Avertissements
       if (!googleConfigured && !facebookConfigured) {
-        console.log(`⚠️ ATTENTION: Aucun provider OAuth configuré!`);
+        console.log(`\n⚠️ ATTENTION: Aucun provider OAuth configuré!`);
+        console.log(`   Ajoutez GOOGLE_CLIENT_ID/SECRET ou FACEBOOK_CLIENT_ID/SECRET dans .env`);
       }
       
       if (!process.env.SESSION_SECRET) {
         console.log(`⚠️ ATTENTION: SESSION_SECRET non défini, utilisation d'une clé par défaut`);
       }
+      
+      console.log(`\n🚀 Service prêt pour MVP M2 !`);
     });
 
   } catch (err) {
