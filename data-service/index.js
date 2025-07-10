@@ -3,35 +3,47 @@ const express = require('express');
 const mongoose = require('mongoose');
 const helmet = require('helmet');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
-const logger = require('./utils/logger');
+
+// Routes
 const tripRoutes = require('./routes/tripRoutes');
 const favoriteRoutes = require('./routes/favoriteRoutes');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
-const metricsRoutes = require('./routes/metricsRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const adminRoutes = require("./routes/adminRoutes");
-const { httpRequestsTotal, httpDurationHistogram } = require('./services/metricsServices');
-const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
-const {
-  register: standardRegister,
-  httpRequestDuration: standardHttpDuration,
-  httpRequestsTotal: standardHttpTotal,
-  updateServiceHealth,
-  updateActiveConnections,
-  updateDatabaseHealth,
-} = require('./metrics');
 
 const app = express();
 const PORT = process.env.PORT || 5002;
-const METRICS_PORT = process.env.METRICS_PORT || 9002;
 const SERVICE_NAME = "data-service";
 
-console.log(`🔥 Démarrage du ${SERVICE_NAME}...`);
+console.log(`🚀 Démarrage du ${SERVICE_NAME}...`);
 
-// MIDDLEWARES DE BASE
+// VALIDATION VARIABLES D'ENVIRONNEMENT
+const requiredEnvVars = {
+  MONGO_URI: process.env.MONGO_URI,
+  JWT_SECRET: process.env.JWT_SECRET,
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET
+};
 
+const missingVars = Object.entries(requiredEnvVars)
+  .filter(([key, value]) => !value)
+  .map(([key]) => key);
+
+if (missingVars.length > 0) {
+  console.error('❌ Variables d\'environnement manquantes:');
+  missingVars.forEach(varName => {
+    console.error(`   - ${varName}`);
+  });
+  console.error('\n💡 Créez un fichier .env avec ces variables:');
+  console.error('   MONGO_URI=mongodb://localhost:27017/roadtrip-dev');
+  console.error('   JWT_SECRET=your-secret-key-here');
+  console.error('   JWT_REFRESH_SECRET=your-refresh-secret-here');
+  process.exit(1);
+}
+
+console.log('✅ Variables d\'environnement validées');
+
+// MIDDLEWARES BASIQUES
 app.use(helmet());
 app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
@@ -40,184 +52,144 @@ app.use(cors({
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// RATE LIMITING
-
-if (process.env.NODE_ENV === 'production') {
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 500,
-    message: { 
-      success: false,
-      error: 'Trop de requêtes, veuillez réessayer plus tard' 
-    }
-  });
-  app.use(limiter);
-} else {
-  const devLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000,
-    max: 1000,
-    message: { error: 'Trop de requêtes (dev)' }
-  });
-  app.use(devLimiter);
-}
-
-// MIDDLEWARE MÉTRIQUES
-
-let currentConnections = 0;
-
+// LOGGING SIMPLE
 app.use((req, res, next) => {
-  const start = process.hrtime();
-  const startMs = Date.now();
-  
-  currentConnections++;
-  updateActiveConnections(currentConnections);
-  
+  const start = Date.now();
   res.on('finish', () => {
-    const duration = process.hrtime(start);
-    const seconds = duration[0] + duration[1] / 1e9;
-
-    httpRequestsTotal.inc({
-      method: req.method,
-      route: req.route?.path || req.path,
-      status_code: res.statusCode,
-    });
-
-    httpDurationHistogram.observe({
-      method: req.method,
-      route: req.route?.path || req.path,
-      status_code: res.statusCode,
-    }, seconds);
-
-    const durationStandard = (Date.now() - startMs) / 1000;
-    currentConnections--;
-    updateActiveConnections(currentConnections);
-
-    standardHttpDuration.observe(
-      {
-        method: req.method,
-        route: req.route?.path || req.path,
-        status_code: res.statusCode,
-      },
-      durationStandard
-    );
-
-    standardHttpTotal.inc({
-      method: req.method,
-      route: req.route?.path || req.path,
-      status_code: res.statusCode,
-    });
-
-    logger.info(`${req.method} ${req.path} - ${res.statusCode} - ${Math.round(durationStandard * 1000)}ms`);
+    const duration = Date.now() - start;
+    console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
   });
-
   next();
 });
 
-// MONITORING MONGODB
+// ROUTES API (avec liens vers autres services)
+app.use('/api/roadtrips', tripRoutes);        // Business logic
+app.use('/api/favorites', favoriteRoutes);    // Fonctionnalités utilisateur
+app.use('/api/messages', messageRoutes);      // 🔗 LIEN AI SERVICE
+app.use('/api/admin', adminRoutes);           // Admin panel
+app.use('/api/auth', authRoutes);             // 🔗 LIEN NOTIFICATION SERVICE  
+app.use('/api/users', userRoutes);            // 🔗 LIEN PAYMENT SERVICE
 
-mongoose.connection.on('connected', () => {
-  logger.info('✅ MongoDB connecté');
-  updateDatabaseHealth('mongodb', true);
-});
-
-mongoose.connection.on('error', (err) => {
-  logger.error('❌ Erreur MongoDB:', err);
-  updateDatabaseHealth('mongodb', false);
-});
-
-mongoose.connection.on('disconnected', () => {
-  logger.warn('⚠️ MongoDB déconnecté');
-  updateDatabaseHealth('mongodb', false);
-});
-
-// ROUTES API
-
-app.use('/api/roadtrips', tripRoutes);
-app.use('/api/favorites', favoriteRoutes);
-app.use('/api/messages', messageRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-
-// ROUTE MÉTRIQUES
-
-app.use('/metrics', metricsRoutes);
-app.get("/metrics-standard", async (req, res) => {
-  res.set("Content-Type", standardRegister.contentType);
-  res.end(await standardRegister.metrics());
-});
-
-// Health check enrichi
+// HEALTH CHECK SIMPLE
 app.get('/health', async (req, res) => {
   const health = {
     status: 'healthy',
+    service: SERVICE_NAME,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    service: SERVICE_NAME,
     version: '1.0.0',
-    database: {}
+    dependencies: {}
   };
 
+  // Vérifier MongoDB
   const dbState = mongoose.connection.readyState;
   if (dbState === 1) {
-    health.database.mongodb = 'connected';
-    updateDatabaseHealth('mongodb', true);
+    health.dependencies.mongodb = 'connected';
   } else {
-    health.database.mongodb = 'disconnected';
-    health.status = 'unhealthy';
-    updateDatabaseHealth('mongodb', false);
+    health.dependencies.mongodb = 'disconnected';
+    health.status = 'degraded';
   }
 
-  const isHealthy = health.status === 'healthy';
-  updateServiceHealth(SERVICE_NAME, isHealthy);
+  // Vérifier Notification Service (lien critique)
+  try {
+    const notificationUrl = process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:5005';
+    const response = await fetch(`${notificationUrl}/health`, { 
+      signal: AbortSignal.timeout(2000) 
+    });
+    health.dependencies.notificationService = response.ok ? 'healthy' : 'unhealthy';
+  } catch (error) {
+    health.dependencies.notificationService = 'unreachable';
+    if (health.status === 'healthy') health.status = 'degraded';
+  }
 
-  const statusCode = isHealthy ? 200 : 503;
+  const statusCode = health.status === 'healthy' ? 200 : 503;
   res.status(statusCode).json(health);
 });
 
-// Vitals
+// DOCUMENTATION API
+app.get("/docs", (req, res) => {
+  res.json({
+    service: SERVICE_NAME,
+    version: "1.0.0",
+    description: "Service de données avec intégrations AI, Notification et Payment",
+    
+    integrations: {
+      notification_service: {
+        url: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:5005',
+        endpoints: [
+          'POST /api/auth/register → Email confirmation',
+          'POST /api/auth/reset-password → Email/SMS reset'
+        ]
+      },
+      ai_service: {
+        endpoints: [
+          'POST /api/messages → Sauvegarde conversations',
+          'GET /api/messages/user/:id → Historique'
+        ]
+      },
+      payment_service: {
+        endpoints: [
+          'POST /api/auth/refresh-user-data → Upgrade premium'
+        ]
+      }
+    },
+    
+    main_endpoints: {
+      "POST /api/auth/register": "Inscription utilisateur",
+      "POST /api/auth/login": "Connexion", 
+      "GET /api/roadtrips": "Liste roadtrips publics",
+      "GET /api/roadtrips/:id": "Détails roadtrip (logique premium)",
+      "POST /api/favorites/toggle/:id": "Gérer favoris",
+      "POST /api/messages": "Sauvegarder message IA",
+      "GET /api/admin/stats": "Statistiques admin"
+    },
+    
+    authentication: {
+      type: "JWT Bearer Token",
+      header: "Authorization: Bearer <token>",
+      endpoints: {
+        login: "POST /api/auth/login",
+        refresh: "POST /api/auth/refresh-token"
+      }
+    }
+  });
+});
+
+// VITALS SIMPLIFIÉ
 app.get("/vitals", (req, res) => {
   const vitals = {
     service: SERVICE_NAME,
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-    cpu: process.cpuUsage(),
     status: "running",
-    active_connections: currentConnections,
     
     database: {
       mongodb: {
         status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-        host: mongoose.connection.host || 'unknown',
-        name: mongoose.connection.name || 'unknown',
-        collections_count: Object.keys(mongoose.connection.collections).length
+        collections: ['users', 'trips', 'favorites', 'aimessages', 'subscriptions']
       }
     },
     
-    api: {
-      endpoints: [
-        '/api/roadtrips',
-        '/api/favorites', 
-        '/api/messages',
-        '/api/admin',
-        '/api/auth',
-        '/api/users'
-      ],
-      rate_limit: process.env.NODE_ENV === 'production' ? '500/15min' : '1000/1min',
-      metrics_endpoints: [
-        '/metrics (existing)',
-        '/metrics-standard (new)',
-        '/health',
-        '/vitals'
-      ]
-    }
+    features: [
+      'JWT Authentication',
+      'MongoDB Persistence', 
+      'Premium Content Logic',
+      'Admin Panel',
+      'GDPR Compliance'
+    ],
+    
+    integrations: [
+      '🔗 Notification Service (emails/SMS)',
+      '🔗 AI Service (conversations)',
+      '🔗 Payment Service (premium)'
+    ]
   };
 
   res.json(vitals);
 });
 
-// Ping
+// PING
 app.get("/ping", (req, res) => {
   res.json({
     status: "pong ✅",
@@ -227,80 +199,77 @@ app.get("/ping", (req, res) => {
   });
 });
 
-// GESTION D'ERREURS
+// GESTION D'ERREURS SIMPLE
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route non trouvée",
+    service: SERVICE_NAME,
+    availableRoutes: [
+      "/health", "/docs", "/vitals", "/ping",
+      "/api/auth/*", "/api/roadtrips/*", "/api/favorites/*", 
+      "/api/messages/* (🔗 ai)", "/api/admin/*"
+    ]
+  });
+});
 
-app.use(notFoundHandler);
-app.use(errorHandler);
-
-// Gestion erreurs MongoDB spécifique
 app.use((err, req, res, next) => {
+  console.error(`❌ Erreur ${SERVICE_NAME}:`, err.message);
+  
+  // Erreurs MongoDB
   if (err.name === 'MongoError' || err.name === 'MongoServerError') {
-    updateDatabaseHealth('mongodb', false);
-    logger.error(`💥 Erreur MongoDB ${SERVICE_NAME}:`, err.message);
     return res.status(503).json({
       error: "Erreur base de données",
       service: SERVICE_NAME,
-      message: "Service temporairement indisponible",
+      message: "Service temporairement indisponible"
     });
   }
-  next(err);
+
+  // Erreurs JWT
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      error: "Token invalide",
+      message: "Authentification requise"
+    });
+  }
+
+  // Erreur générique
+  res.status(err.statusCode || 500).json({
+    error: "Erreur serveur",
+    service: SERVICE_NAME,
+    message: err.message || "Une erreur est survenue",
+    timestamp: new Date().toISOString()
+  });
 });
 
-// DÉMARRAGE SERVEUR
-
+// DÉMARRAGE
 async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    logger.info('✅ MongoDB connecté');
-    updateDatabaseHealth('mongodb', true);
+    console.log('✅ MongoDB connecté');
 
     app.listen(PORT, () => {
       console.log(`💾 ${SERVICE_NAME} démarré sur le port ${PORT}`);
-      console.log(`📊 Métriques existantes: http://localhost:${PORT}/metrics`);
-      console.log(`📊 Métriques standardisées: http://localhost:${PORT}/metrics-standard`);
-      console.log(`❤️ Health: http://localhost:${PORT}/health`);
+      console.log(`📋 Documentation: http://localhost:${PORT}/docs`);
+      console.log(`❤️ Health check: http://localhost:${PORT}/health`);
       console.log(`📈 Vitals: http://localhost:${PORT}/vitals`);
-      
-      updateServiceHealth(SERVICE_NAME, true);
-      logger.info(`✅ ${SERVICE_NAME} avec métriques démarré`);
-    });
-
-    const metricsApp = express();
-    metricsApp.get('/metrics', async (req, res) => {
-      res.set('Content-Type', standardRegister.contentType);
-      res.end(await standardRegister.metrics());
-    });
-
-    metricsApp.get('/health', (req, res) => {
-      res.json({ status: 'healthy', service: `${SERVICE_NAME}-metrics` });
-    });
-
-    metricsApp.listen(METRICS_PORT, () => {
-      console.log(`📊 Serveur métriques standardisées sur le port ${METRICS_PORT}`);
-      console.log(`🎯 Prometheus scrape: http://localhost:${METRICS_PORT}/metrics`);
+      console.log(`🔗 Intégrations: Notification (${process.env.NOTIFICATION_SERVICE_URL || '5005'}), AI, Payment`);
     });
 
   } catch (error) {
-    logger.error('❌ Erreur démarrage:', error);
-    updateServiceHealth(SERVICE_NAME, false);
-    updateDatabaseHealth('mongodb', false);
+    console.error('❌ Erreur démarrage:', error);
     process.exit(1);
   }
 }
 
 // ARRÊT GRACIEUX
-
 async function gracefulShutdown(signal) {
-  logger.info(`🛑 Arrêt ${SERVICE_NAME} (${signal})...`);
-  updateServiceHealth(SERVICE_NAME, false);
-  updateDatabaseHealth('mongodb', false);
-  updateActiveConnections(0);
+  console.log(`🔄 Arrêt ${SERVICE_NAME} (${signal})...`);
   
   try {
     await mongoose.connection.close();
-    logger.info('✅ MongoDB fermé proprement');
+    console.log('✅ MongoDB fermé proprement');
   } catch (error) {
-    logger.error('❌ Erreur fermeture MongoDB:', error);
+    console.error('❌ Erreur fermeture MongoDB:', error);
   }
   
   setTimeout(() => {
@@ -312,13 +281,11 @@ process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection:', reason);
-  updateServiceHealth(SERVICE_NAME, false);
+  console.error('Unhandled Rejection:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-  logger.error('Uncaught Exception:', error);
-  updateServiceHealth(SERVICE_NAME, false);
+  console.error('Uncaught Exception:', error);
   process.exit(1);
 });
 

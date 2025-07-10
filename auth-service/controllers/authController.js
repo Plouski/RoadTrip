@@ -1,7 +1,4 @@
-const logger = require("../utils/logger");
-
 class AuthController {
-  
   // Méthode pour gérer les connexions OAuth
   static async handleOAuthSuccess(req, res, next) {
     try {
@@ -14,7 +11,7 @@ class AuthController {
       const { user, accessToken, refreshToken } = req.user;
       const { _id, email, firstName, lastName, role, avatar } = user;
 
-      logger.logAuthEvent("oauth_login", {
+      console.log("oauth_login", {
         userId: _id,
         provider: user.oauth?.provider,
       });
@@ -47,7 +44,7 @@ class AuthController {
 
       return res.redirect(redirectUrl.toString());
     } catch (error) {
-      logger.error(
+      console.error(
         "Erreur lors du traitement de l'authentification OAuth",
         error
       );

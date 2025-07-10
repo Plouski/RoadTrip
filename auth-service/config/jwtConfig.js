@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const logger = require('../utils/logger');
 
 class JwtConfig {
   // Générer un token d'accès
@@ -17,7 +16,7 @@ class JwtConfig {
         }
       );
     } catch (error) {
-      logger.error('Erreur lors de la génération du token', error);
+      console.error('Erreur lors de la génération du token', error);
       throw error;
     }
   }
@@ -36,7 +35,7 @@ class JwtConfig {
         }
       );
     } catch (error) {
-      logger.error('Erreur lors de la génération du token de rafraîchissement', error);
+      console.error('Erreur lors de la génération du token de rafraîchissement', error);
       throw error;
     }
   }
@@ -47,11 +46,11 @@ class JwtConfig {
       return jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       if (error.name === 'TokenExpiredError') {
-        logger.warn('Token expiré');
+        console.warn('Token expiré');
         throw new Error('Token expiré');
       }
       if (error.name === 'JsonWebTokenError') {
-        logger.warn('Token invalide');
+        console.warn('Token invalide');
         throw new Error('Token invalide');
       }
       throw error;
@@ -72,7 +71,7 @@ class JwtConfig {
 
       return accessToken;
     } catch (error) {
-      logger.error('Erreur lors du rafraîchissement du token', error);
+      console.error('Erreur lors du rafraîchissement du token', error);
       throw error;
     }
   }

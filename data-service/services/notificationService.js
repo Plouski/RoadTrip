@@ -1,15 +1,18 @@
 const axios = require("axios");
 const logger = require("../utils/logger");
 const User = require("../models/User");
-const NOTIFICATION_SERVICE_URL =
-  process.env.NOTIFICATION_SERVICE_URL || "http://localhost:5005";
+
+const NOTIFICATION_SERVICE_URL = process.env.NOTIFICATION_SERVICE_URL || "http://localhost:5005";
 const FREE_MOBILE_USERNAME = process.env.FREE_MOBILE_USERNAME;
 const FREE_MOBILE_API_KEY = process.env.FREE_MOBILE_API_KEY;
 
 const createAxiosInstance = () => {
   return axios.create({
     timeout: 60000,
-    headers: { "Content-Type": "application/json" },
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": process.env.NOTIFICATION_API_KEY || "test-api-key-123"
+    },
   });
 };
 
@@ -26,18 +29,27 @@ const NotificationService = {
         };
       }
 
+      console.log(`📧 Envoi email confirmation à ${email} via ${NOTIFICATION_SERVICE_URL}`);
+
       const axiosInstance = createAxiosInstance();
+      
+      // ✅ CORRECTION: Utiliser la bonne URL du notification-service
       const res = await axiosInstance.post(
-        `${NOTIFICATION_SERVICE_URL}/api/notifications/email`,
-        { type: "confirm", email, tokenOrCode: token }
+        `${NOTIFICATION_SERVICE_URL}/api/email/confirm`,
+        { 
+          email, 
+          token 
+        }
       );
 
-      logger.info("✅ Email de confirmation envoyé", { email });
+      console.log("✅ Email de confirmation envoyé avec succès");
       return res;
     } catch (error) {
-      logger.error("❌ Erreur envoi email confirmation", {
+      console.error("❌ Erreur envoi email confirmation:", {
         email,
         error: error.message,
+        url: `${NOTIFICATION_SERVICE_URL}/api/email/confirm`,
+        status: error.response?.status
       });
       throw error;
     }
@@ -53,24 +65,30 @@ const NotificationService = {
       });
 
       if (!user) {
-        logger.info("🚫 Code de reset invalide ou expiré", { email, code });
+        console.log("🚫 Code de reset invalide ou expiré", { email, code });
         return { status: 200, data: { message: "Code invalide ou expiré" } };
       }
 
-      logger.info("✅ Code de reset valide, envoi email", { email });
+      console.log(`📧 Envoi email reset à ${email} via ${NOTIFICATION_SERVICE_URL}`);
 
       const axiosInstance = createAxiosInstance();
+      
+      // ✅ CORRECTION: Utiliser la bonne URL du notification-service
       const res = await axiosInstance.post(
-        `${NOTIFICATION_SERVICE_URL}/api/notifications/email`,
-        { type: "reset", email, tokenOrCode: code }
+        `${NOTIFICATION_SERVICE_URL}/api/email/reset`,
+        { 
+          email, 
+          code 
+        }
       );
 
-      logger.info("✅ Email de réinitialisation envoyé", { email });
+      console.log("✅ Email de réinitialisation envoyé");
       return res;
     } catch (error) {
-      logger.error("❌ Erreur envoi email reset", {
+      console.error("❌ Erreur envoi email reset:", {
         email,
         error: error.message,
+        url: `${NOTIFICATION_SERVICE_URL}/api/email/reset`
       });
 
       const user = await User.findOne({
@@ -80,12 +98,12 @@ const NotificationService = {
       });
 
       if (!user) {
-        logger.info("🚫 Code devenu invalide pendant l'erreur", { email });
+        console.log("🚫 Code devenu invalide pendant l'erreur", { email });
         return { status: 200, data: { message: "Code invalide" } };
       }
 
       if (retryCount < 1) {
-        logger.warn("🔄 Retry envoi email");
+        console.log("🔄 Retry envoi email");
         await new Promise((resolve) => setTimeout(resolve, 3000));
         return NotificationService.sendPasswordResetEmail(
           email,
@@ -105,33 +123,39 @@ const NotificationService = {
         throw new Error("Configuration Free Mobile manquante");
       }
 
+      console.log(`📱 Envoi SMS reset via ${NOTIFICATION_SERVICE_URL}`);
+
       const axiosInstance = createAxiosInstance();
+      
+      // ✅ CORRECTION: Utiliser la bonne URL du notification-service
       const response = await axiosInstance.post(
-        `${NOTIFICATION_SERVICE_URL}/api/notifications/sms`,
+        `${NOTIFICATION_SERVICE_URL}/api/sms/reset`,
         {
           username: FREE_MOBILE_USERNAME,
           apiKey: FREE_MOBILE_API_KEY,
           code: code,
-          type: "reset",
         }
       );
 
       if (response.status === 500) {
-        logger.warn("⚠️ SMS possiblement envoyé malgré erreur 500");
+        console.log("⚠️ SMS possiblement envoyé malgré erreur 500");
         return { success: true, message: "SMS possiblement envoyé" };
       }
 
-      logger.info("✅ SMS envoyé avec succès");
+      console.log("✅ SMS envoyé avec succès");
       return { success: true, message: "SMS envoyé" };
     } catch (error) {
-      logger.error("❌ Erreur envoi SMS", { error: error.message });
+      console.error("❌ Erreur envoi SMS:", { 
+        error: error.message,
+        url: `${NOTIFICATION_SERVICE_URL}/api/sms/reset`
+      });
       return { success: false, message: "Erreur SMS" };
     }
   },
 
   // Plus d'annulation, juste un log
   cancelPendingEmails: (email) => {
-    logger.info("🚫 Demande d'annulation", { email });
+    console.log("🚫 Demande d'annulation", { email });
   },
 };
 

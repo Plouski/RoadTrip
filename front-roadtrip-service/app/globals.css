@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+    
+    --primary: 357 96% 45%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 100%;
+    
+    --accent: 51 100% 50%;
+    --accent-foreground: 0 0% 0%;
+    
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 45%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 0 0% 90%;
+    --input: 0 0% 85%;
+    --ring: 357 96% 45%;
+    
+    --radius: 0.75rem;
+  }
+ 
+  .dark {
+    --background: 0 0% 10%;
+    --foreground: 0 0% 90%;
+    
+    --card: 0 0% 15%;
+    --card-foreground: 0 0% 90%;
+    
+    --popover: 0 0% 15%;
+    --popover-foreground: 0 0% 90%;
+    
+    --primary: 357 96% 45%;
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 0 0% 30%;
+    --secondary-foreground: 0 0% 100%;
+    
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 60%;
+    
+    --accent: 51 100% 50%;
+    --accent-foreground: 0 0% 0%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 0 0% 30%;
+    --input: 0 0% 25%;
+    --ring: 357 96% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Classes personnalisées existantes */
+.hero-gradient {
+  background: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.7));
+}
+
+/* Mise à jour pour les badges premium avec les couleurs ROADTRIP! */
+.premium-badge {
+  background: linear-gradient(45deg, #E30613);
+}
+
+.premium-blur {
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+.premium-overlay {
+  background: linear-gradient(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.9));
+}
+
+/* Nouvelles classes utilitaires pour ROADTRIP! */
+@layer components {
+  /* Cartes de roadtrip */
+  .roadtrip-card {
+    @apply overflow-hidden transition-all hover:shadow-md border-t-4 border-t-primary;
+  }
+  
+  /* Conteneur de filtres */
+  .filter-container {
+    @apply mb-8 bg-white rounded-xl shadow-md p-5 border-t-4 border-t-primary;
+  }
+  
+  /* États focus personnalisés */
+  .roadtrip-focus {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2;
+  }
+  
+  /* Animation pour les favoris */
+  .favorite-animation {
+    @apply transition-transform duration-300 hover:scale-110;
+  }
+  
+  /* Bouton principal avec icône */
+  .roadtrip-button {
+    @apply bg-primary text-white flex items-center justify-center gap-2 px-4 py-2 rounded-md hover:bg-primary-700 transition-colors;
+  }
+}

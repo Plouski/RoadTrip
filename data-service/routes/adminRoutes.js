@@ -1,56 +1,30 @@
-const express = require("express")
-const adminController = require("../controllers/adminController")
-const { authMiddleware, roleMiddleware } = require("../middlewares/authMiddleware");
+const express = require("express");
+const adminController = require("../controllers/adminController");
+const { authMiddleware, adminMiddleware } = require("../middlewares/authMiddleware");
 
-// Middleware pour vérifier que l'utilisateur a le rôle "admin"
-const isAdmin = roleMiddleware(["admin"]);
+const router = express.Router();
 
-const router = express.Router()
+// Toutes les routes admin nécessitent une authentification admin
+router.use(authMiddleware, adminMiddleware);
 
-// Routes statistiques
+// DASHBOARD - Statistiques générales
+router.get("/stats", adminController.getStats);
+router.get("/users/recent", adminController.getRecentUsers);
+router.get("/roadtrips/recent", adminController.getRecentRoadtrips);
 
-// Récupérer les statistiques générales de l'application
-router.get("/stats", authMiddleware, isAdmin, adminController.getStats)
+// GESTION UTILISATEURS
+router.get("/users", adminController.getUsers);
+router.get("/users/:id", adminController.getUserById);
+router.put("/users/:id", adminController.updateUser);
+router.put("/users/status/:id", adminController.updateUserStatus);
+router.delete("/users/:id", adminController.deleteUser);
 
-// Récupérer les derniers utilisateurs inscrits
-router.get("/users/recent", authMiddleware, isAdmin, adminController.getRecentUsers)
+// GESTION ROADTRIPS
+router.get("/roadtrips", adminController.getRoadtrips);
+router.get("/roadtrips/:id", adminController.getTripById);
+router.post("/roadtrips", adminController.createRoadtrip);
+router.put("/roadtrips/:id", adminController.updateRoadtrip);
+router.patch("/roadtrips/status/:id", adminController.updateRoadtripStatus);
+router.delete("/roadtrips/:id", adminController.deleteTrip);
 
-// Récupérer les derniers roadtrips créés
-router.get("/roadtrips/recent", authMiddleware, isAdmin, adminController.getRecentRoadtrips)
-
-// Gestion des utilisateurs
-
-// Récupérer la liste de tous les utilisateurs
-router.get("/users", authMiddleware, isAdmin, adminController.getUsers);
-
-// Modifier le statut d'un utilisateur (ex : actif, suspendu)
-router.put("/users/status/:id", authMiddleware, isAdmin, adminController.updateUserStatus);
-
-// Récupérer les informations détaillées d'un utilisateur par son ID
-router.get("/users/:id", authMiddleware, isAdmin, adminController.getUserById);
-
-// Mettre à jour les informations d'un utilisateur
-router.put("/users/:id", authMiddleware, isAdmin, adminController.updateUser);
-
-// Supprimer un utilisateur (et ses données associées si nécessaire)
-router.delete("/users/:id", authMiddleware, isAdmin, adminController.deleteUser);
-
-
-// Gestion des roadtrips
-
-// Récupérer la liste de tous les roadtrips
-router.get("/roadtrips", authMiddleware, isAdmin, adminController.getRoadtrips);
-
-// Créer un nouveau roadtrip
-router.post("/roadtrips", authMiddleware, isAdmin, adminController.createTrip);
-
-// Modifier un roadtrip existant
-router.put("/roadtrips/:id", authMiddleware, isAdmin, adminController.updateTrip);
-
-// Supprimer un roadtrip
-router.delete("/roadtrips/:id", authMiddleware, isAdmin, adminController.deleteTrip);
-
-// Modifier le statut d’un roadtrip (ex : publié, brouillon)
-router.patch("/roadtrips/status/:id", authMiddleware, isAdmin, adminController.updateRoadtripStatus);
-
-module.exports = router
+module.exports = router;
