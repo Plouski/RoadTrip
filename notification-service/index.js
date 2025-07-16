@@ -7,6 +7,16 @@ const cors = require("cors");
 const EmailService = require("./services/emailService");
 const SmsService = require("./services/smsService");
 
+// Import des métriques générales
+const {
+  register,
+  httpRequestDuration,
+  httpRequestsTotal,
+  updateServiceHealth,
+  updateActiveConnections,
+  updateExternalServiceHealth
+} = require("./metrics");
+
 const app = express();
 const PORT = process.env.PORT || 5005;
 const SERVICE_NAME = "notification-service";
@@ -25,13 +35,41 @@ app.use(cors({
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-// LOGGING SIMPLE
+// MIDDLEWARE DE MÉTRIQUES PROMETHEUS
+let currentConnections = 0;
+
 app.use((req, res, next) => {
   const start = Date.now();
+  currentConnections++;
+  updateActiveConnections(currentConnections);
+  
   res.on("finish", () => {
-    const duration = Date.now() - start;
-    console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
+    const duration = (Date.now() - start) / 1000;
+    currentConnections--;
+    updateActiveConnections(currentConnections);
+
+    // Métriques Prometheus
+    httpRequestDuration.observe(
+      {
+        method: req.method,
+        route: req.route?.path || req.path,
+        status_code: res.statusCode,
+      },
+      duration
+    );
+
+    httpRequestsTotal.inc({
+      method: req.method,
+      route: req.route?.path || req.path,
+      status_code: res.statusCode,
+    });
+    
+    // Logging (silencieux en mode test)
+    if (process.env.NODE_ENV !== 'test') {
+      console.log(`${req.method} ${req.path} - ${res.statusCode} - ${Math.round(duration * 1000)}ms`);
+    }
   });
+  
   next();
 });
 
@@ -53,6 +91,12 @@ const validateEmail = (email) => {
   return regex.test(email);
 };
 
+// MÉTRIQUES PROMETHEUS
+app.get("/metrics", async (req, res) => {
+  res.set("Content-Type", register.contentType);
+  res.end(await register.metrics());
+});
+
 // 🔥 VRAIES ROUTES AVEC VRAIS SERVICES
 app.post("/api/email/confirm", requireApiKey, async (req, res) => {
   try {
@@ -71,7 +115,9 @@ app.post("/api/email/confirm", requireApiKey, async (req, res) => {
       });
     }
 
-    console.log(`📧 Tentative envoi VRAI email de confirmation à ${email}`);
+    if (process.env.NODE_ENV !== 'test') {
+      console.log(`📧 Tentative envoi VRAI email de confirmation à ${email}`);
+    }
 
     try {
       // 🔥 UTILISATION DU VRAI SERVICE EMAIL
@@ -84,7 +130,9 @@ app.post("/api/email/confirm", requireApiKey, async (req, res) => {
     } catch (error) {
       // Si Mailjet pas configuré, mode simulation
       if (error.message.includes('Configuration Mailjet manquante')) {
-        console.log(`📧 [FALLBACK SIMULATION] Email confirmation pour ${email}`);
+        if (process.env.NODE_ENV !== 'test') {
+          console.log(`📧 [FALLBACK SIMULATION] Email confirmation pour ${email}`);
+        }
         return res.json({
           success: true,
           message: "Email simulé - Configurez Mailjet pour de vrais emails",
@@ -95,7 +143,9 @@ app.post("/api/email/confirm", requireApiKey, async (req, res) => {
     }
 
   } catch (error) {
-    console.error("❌ Erreur email confirmation:", error.message);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error("❌ Erreur email confirmation:", error.message);
+    }
     res.status(500).json({
       error: "Erreur d'envoi email",
       message: error.message
@@ -120,7 +170,9 @@ app.post("/api/email/reset", requireApiKey, async (req, res) => {
       });
     }
 
-    console.log(`📧 Tentative envoi VRAI email reset à ${email}`);
+    if (process.env.NODE_ENV !== 'test') {
+      console.log(`📧 Tentative envoi VRAI email reset à ${email}`);
+    }
 
     try {
       // 🔥 UTILISATION DU VRAI SERVICE EMAIL
@@ -132,7 +184,9 @@ app.post("/api/email/reset", requireApiKey, async (req, res) => {
       });
     } catch (error) {
       if (error.message.includes('Configuration Mailjet manquante')) {
-        console.log(`📧 [FALLBACK SIMULATION] Email reset pour ${email}`);
+        if (process.env.NODE_ENV !== 'test') {
+          console.log(`📧 [FALLBACK SIMULATION] Email reset pour ${email}`);
+        }
         return res.json({
           success: true,
           message: "Email reset simulé - Configurez Mailjet"
@@ -142,7 +196,9 @@ app.post("/api/email/reset", requireApiKey, async (req, res) => {
     }
 
   } catch (error) {
-    console.error("❌ Erreur email reset:", error.message);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error("❌ Erreur email reset:", error.message);
+    }
     res.status(500).json({
       error: "Erreur d'envoi email",
       message: error.message
@@ -161,7 +217,9 @@ app.post("/api/sms/reset", requireApiKey, async (req, res) => {
       });
     }
 
-    console.log(`📱 Tentative envoi VRAI SMS à ${username}`);
+    if (process.env.NODE_ENV !== 'test') {
+      console.log(`📱 Tentative envoi VRAI SMS à ${username}`);
+    }
     
     try {
       // 🔥 UTILISATION DU VRAI SERVICE SMS
@@ -172,7 +230,9 @@ app.post("/api/sms/reset", requireApiKey, async (req, res) => {
         message: "SMS de reset envoyé ✅"
       });
     } catch (error) {
-      console.log(`📱 [FALLBACK SIMULATION] SMS reset pour ${username}`);
+      if (process.env.NODE_ENV !== 'test') {
+        console.log(`📱 [FALLBACK SIMULATION] SMS reset pour ${username}`);
+      }
       res.json({
         success: true,
         message: "SMS simulé - Vérifiez la config Free Mobile"
@@ -180,7 +240,9 @@ app.post("/api/sms/reset", requireApiKey, async (req, res) => {
     }
 
   } catch (error) {
-    console.error("❌ Erreur SMS reset:", error.message);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error("❌ Erreur SMS reset:", error.message);
+    }
     res.status(500).json({
       error: "Erreur d'envoi SMS",
       message: error.message
@@ -188,7 +250,7 @@ app.post("/api/sms/reset", requireApiKey, async (req, res) => {
   }
 });
 
-// HEALTH CHECK AMÉLIORÉ
+// HEALTH CHECK ENRICHI
 app.get("/health", (req, res) => {
   const health = {
     status: "healthy",
@@ -206,7 +268,49 @@ app.get("/health", (req, res) => {
     port: PORT
   };
 
+  // Mettre à jour les métriques des services externes
+  updateExternalServiceHealth('mailjet', health.config.mailjet);
+  updateExternalServiceHealth('free_mobile', health.config.freeMobile);
+
+  // Mettre à jour la santé globale du service
+  const isHealthy = health.status === "healthy";
+  updateServiceHealth(SERVICE_NAME, isHealthy);
+
   res.status(200).json(health);
+});
+
+// VITALS ENRICHI
+app.get("/vitals", (req, res) => {
+  const vitals = {
+    service: SERVICE_NAME,
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    cpu: process.cpuUsage(),
+    status: "running",
+    active_connections: currentConnections,
+    
+    features: [
+      'Email Notifications (Mailjet)',
+      'SMS Notifications (Free Mobile)',
+      'API Key Authentication',
+      'Fallback Simulation Mode',
+      'Prometheus Metrics'
+    ],
+    
+    providers: {
+      mailjet: {
+        configured: !!(process.env.MAILJET_API_KEY && process.env.MAILJET_API_SECRET),
+        status: 'Email provider for confirmations and resets'
+      },
+      freeMobile: {
+        configured: !!(process.env.FREE_MOBILE_USERNAME && process.env.FREE_MOBILE_API_KEY),
+        status: 'SMS provider for password resets'
+      }
+    }
+  };
+
+  res.json(vitals);
 });
 
 // DOCUMENTATION API
@@ -215,6 +319,9 @@ app.get("/docs", (req, res) => {
     service: SERVICE_NAME,
     version: "1.0.0",
     endpoints: {
+      "GET /health": "Status du service + config",
+      "GET /vitals": "Informations système",
+      "GET /metrics": "Métriques Prometheus",
       "POST /api/email/confirm": {
         description: "Envoie un email de confirmation (Mailjet)",
         body: { email: "string", token: "string" },
@@ -229,9 +336,6 @@ app.get("/docs", (req, res) => {
         description: "Envoie un SMS de reset password (Free Mobile)",
         body: { username: "string", apiKey: "string", code: "string" },
         headers: { "x-api-key": "required" }
-      },
-      "GET /health": {
-        description: "Status du service + config"
       }
     },
     authentication: {
@@ -258,12 +362,14 @@ app.use((req, res) => {
   res.status(404).json({
     error: "Route non trouvée",
     service: SERVICE_NAME,
-    availableRoutes: ["/health", "/docs", "/api/email/*", "/api/sms/*"]
+    availableRoutes: ["/health", "/vitals", "/docs", "/metrics", "/api/email/*", "/api/sms/*"]
   });
 });
 
 app.use((err, req, res, next) => {
-  console.error(`❌ Erreur ${SERVICE_NAME}:`, err.message);
+  if (process.env.NODE_ENV !== 'test') {
+    console.error(`❌ Erreur ${SERVICE_NAME}:`, err.message);
+  }
   
   res.status(err.statusCode || 500).json({
     error: "Erreur serveur",
@@ -273,30 +379,51 @@ app.use((err, req, res, next) => {
   });
 });
 
-// DÉMARRAGE AVEC INFO CONFIG
-app.listen(PORT, () => {
-  console.log(`✅ ${SERVICE_NAME} démarré sur le port ${PORT}`);
-  console.log(`📋 Documentation: http://localhost:${PORT}/docs`);
-  console.log(`❤️ Health check: http://localhost:${PORT}/health`);
-  console.log(`🔑 API Key configurée: ${process.env.API_KEY ? 'OUI' : 'NON'}`);
-  
-  // Info config
-  const mailjetConfigured = !!(process.env.MAILJET_API_KEY && process.env.MAILJET_API_SECRET);
-  console.log(`📧 Mailjet configuré: ${mailjetConfigured ? 'OUI - Emails réels' : 'NON - Mode simulation'}`);
-  
-  const smsConfigured = !!(process.env.FREE_MOBILE_USERNAME && process.env.FREE_MOBILE_API_KEY);
-  console.log(`📱 Free Mobile configuré: ${smsConfigured ? 'OUI - SMS réels' : 'NON - Mode simulation'}`);
-});
+// DÉMARRAGE SEULEMENT SI PAS EN MODE TEST
+if (process.env.NODE_ENV !== 'test') {
+  const server = app.listen(PORT, () => {
+    console.log(`✅ ${SERVICE_NAME} démarré sur le port ${PORT}`);
+    console.log(`📋 Documentation: http://localhost:${PORT}/docs`);
+    console.log(`❤️ Health check: http://localhost:${PORT}/health`);
+    console.log(`📈 Vitals: http://localhost:${PORT}/vitals`);
+    console.log(`📊 Métriques: http://localhost:${PORT}/metrics`);
+    console.log(`🔑 API Key configurée: ${process.env.API_KEY ? 'OUI' : 'NON'}`);
+    
+    // Info config
+    const mailjetConfigured = !!(process.env.MAILJET_API_KEY && process.env.MAILJET_API_SECRET);
+    console.log(`📧 Mailjet configuré: ${mailjetConfigured ? 'OUI - Emails réels' : 'NON - Mode simulation'}`);
+    
+    const smsConfigured = !!(process.env.FREE_MOBILE_USERNAME && process.env.FREE_MOBILE_API_KEY);
+    console.log(`📱 Free Mobile configuré: ${smsConfigured ? 'OUI - SMS réels' : 'NON - Mode simulation'}`);
 
-// GRACEFUL SHUTDOWN
-process.on("SIGTERM", () => {
-  console.log("🔄 Arrêt du service...");
-  process.exit(0);
-});
+    // Initialisation des métriques
+    updateServiceHealth(SERVICE_NAME, true);
+    updateExternalServiceHealth('mailjet', mailjetConfigured);
+    updateExternalServiceHealth('free_mobile', smsConfigured);
+    
+    console.log(`\n🚀 ${SERVICE_NAME} prêt !`);
+  });
 
-process.on("SIGINT", () => {
-  console.log("🔄 Arrêt du service...");
-  process.exit(0);
-});
+  // GRACEFUL SHUTDOWN
+  function gracefulShutdown(signal) {
+    console.log(`🔄 Arrêt du service (${signal})...`);
+    updateServiceHealth(SERVICE_NAME, false);
+    updateActiveConnections(0);
+    
+    if (server) {
+      server.close(() => {
+        console.log('📴 Serveur fermé');
+        process.exit(0);
+      });
+    } else {
+      process.exit(0);
+    }
+  }
 
-module.exports = app;
+  process.on("SIGTERM", gracefulShutdown);
+  process.on("SIGINT", gracefulShutdown);
+
+  module.exports = { app, server };
+} else {
+  module.exports = app;
+}

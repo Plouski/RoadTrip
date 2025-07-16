@@ -31,7 +31,7 @@ npm test
 2. Facebook Login → Paramètres
 3. Valid OAuth Redirect URIs: `http://localhost:5001/auth/oauth/facebook/callback`
 
-## 📊 Endpoints MVP
+## 📊 Endpoints
 
 | Endpoint | Description |
 |----------|-------------|

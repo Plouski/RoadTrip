@@ -155,7 +155,7 @@ app.use((err, req, res, next) => {
 // DÉMARRAGE
 
 // Serveur principal
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🤖 ${SERVICE_NAME} démarré sur le port ${PORT}`);
   console.log(`📊 Métriques: http://localhost:${PORT}/metrics`);
   console.log(`❤️ Health: http://localhost:${PORT}/health`);
@@ -178,7 +178,7 @@ metricsApp.get('/health', (req, res) => {
   res.json({ status: 'healthy', service: `${SERVICE_NAME}-metrics` });
 });
 
-metricsApp.listen(METRICS_PORT, () => {
+const metricsServer = metricsApp.listen(METRICS_PORT, () => {
   console.log(`📊 Metrics server running on port ${METRICS_PORT}`);
 });
 
@@ -188,6 +188,19 @@ function gracefulShutdown(signal) {
   console.log(`🔄 Arrêt ${SERVICE_NAME} (${signal})...`);
   updateServiceHealth(SERVICE_NAME, false);
   updateActiveConnections(0);
+  
+  // Fermer les serveurs proprement
+  if (server) {
+    server.close(() => {
+      console.log('📴 Serveur principal fermé');
+    });
+  }
+  
+  if (metricsServer) {
+    metricsServer.close(() => {
+      console.log('📴 Serveur métriques fermé');
+    });
+  }
   
   setTimeout(() => {
     process.exit(0);
@@ -209,4 +222,4 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
-module.exports = app;
+module.exports = { app, server, metricsServer };

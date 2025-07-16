@@ -54,7 +54,7 @@ const SmsService = {
 
   // Envoie un SMS de réinitialisation de mot de passe
   sendPasswordResetCode: async (username, apiKey, code) => {
-    const message = `ROADTRIP - Code de réinitialisation: ${code}`;
+    const message = `RoadTrip! - Votre code de réinitialisation est : ${code}`;
     return await SmsService.sendSMS(username, apiKey, message);
   }
 };

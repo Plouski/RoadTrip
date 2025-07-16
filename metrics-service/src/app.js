@@ -15,7 +15,7 @@ const register = new promClient.Registry();
 promClient.collectDefaultMetrics({ register });
 
 // ═══════════════════════════════════════════════════════════════
-// MVP - ENDPOINTS ESSENTIELS SEULEMENT
+// ENDPOINTS ESSENTIELS SEULEMENT
 // ═══════════════════════════════════════════════════════════════
 
 // Health check
@@ -33,12 +33,12 @@ app.get('/metrics', async (req, res) => {
   res.end(await register.metrics());
 });
 
-// 📊 MVP: Dashboard simple - JUSTE les infos essentielles
+// 📊: Dashboard simple - JUSTE les infos essentielles
 app.get('/api/dashboard', async (req, res) => {
   try {
     const prometheusUrl = process.env.PROMETHEUS_URL || 'http://prometheus:9090';
     
-    // Juste 2 requêtes essentielles pour le MVP
+    // Juste 2 requêtes essentielles
     const [upResponse, requestsResponse] = await Promise.all([
       axios.get(`${prometheusUrl}/api/v1/query?query=up`).catch(() => ({ data: { data: { result: [] } } })),
       axios.get(`${prometheusUrl}/api/v1/query?query=rate(http_requests_total[5m])`).catch(() => ({ data: { data: { result: [] } } }))
@@ -47,7 +47,7 @@ app.get('/api/dashboard', async (req, res) => {
     const upMetrics = upResponse.data.data.result || [];
     const requestMetrics = requestsResponse.data.data.result || [];
 
-    // Format simple pour le MVP
+    // Format simple
     const dashboard = {
       timestamp: new Date().toISOString(),
       services: {
@@ -68,7 +68,9 @@ app.get('/api/dashboard', async (req, res) => {
     res.json({ success: true, data: dashboard });
     
   } catch (error) {
-    console.error('Erreur dashboard MVP:', error.message);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error('Erreur dashboard:', error.message);
+    }
     res.status(500).json({
       success: false,
       error: 'Erreur lors de la récupération des métriques'
@@ -76,7 +78,7 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
-// 📈 MVP: Vue d'ensemble simple des services
+// 📈: Vue d'ensemble simple des services
 app.get('/api/services/status', async (req, res) => {
   try {
     const prometheusUrl = process.env.PROMETHEUS_URL || 'http://prometheus:9090';
@@ -92,7 +94,9 @@ app.get('/api/services/status', async (req, res) => {
     res.json({ success: true, services });
     
   } catch (error) {
-    console.error('Erreur status services:', error.message);
+    if (process.env.NODE_ENV !== 'test') {
+      console.error('Erreur status services:', error.message);
+    }
     res.status(500).json({ success: false, error: 'Erreur services status' });
   }
 });
@@ -100,7 +104,7 @@ app.get('/api/services/status', async (req, res) => {
 // 🏠 Page d'accueil simple
 app.get('/', (req, res) => {
   res.json({
-    service: 'Metrics Service API - MVP',
+    service: 'Metrics Service API',
     version: '1.0.0',
     endpoints: [
       'GET /health - Service health',
@@ -113,9 +117,17 @@ app.get('/', (req, res) => {
   });
 });
 
-// Démarrage
-app.listen(PORT, () => {
-  console.log(`🚀 Metrics Service (MVP) démarré sur le port ${PORT}`);
-  console.log(`📊 Dashboard: http://localhost:${PORT}/api/dashboard`);
-  console.log(`📈 Services: http://localhost:${PORT}/api/services/status`);
-});
+// Démarrage SEULEMENT SI PAS EN MODE TEST
+if (process.env.NODE_ENV !== 'test') {
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Metrics Service démarré sur le port ${PORT}`);
+    console.log(`📊 Dashboard: http://localhost:${PORT}/api/dashboard`);
+    console.log(`📈 Services: http://localhost:${PORT}/api/services/status`);
+  });
+
+  // Export pour potentielle fermeture
+  module.exports = { app, server };
+} else {
+  // En mode test, export juste l'app
+  module.exports = app;
+}

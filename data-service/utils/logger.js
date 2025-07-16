@@ -7,7 +7,7 @@ const consoleFormat = winston.format.printf(({ level, message, timestamp, ...met
   return `${timestamp} [${level.toUpperCase()}]: ${message}${metaString}`;
 });
 
-// Logger simplifié pour MVP
+// Logger simplifié pour
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(

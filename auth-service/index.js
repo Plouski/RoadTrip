@@ -10,13 +10,24 @@ const rateLimit = require("express-rate-limit");
 const PassportConfig = require("./config/passportConfig");
 const authRoutes = require("./routes/authRoutes");
 
+// Import des métriques générales
+const {
+  register,
+  httpRequestDuration,
+  httpRequestsTotal,
+  updateServiceHealth,
+  updateActiveConnections,
+  updateDatabaseHealth,
+  updateExternalServiceHealth
+} = require("./metrics");
+
 const app = express();
 const PORT = process.env.PORT || 5001;
 const SERVICE_NAME = "auth-service";
 
-console.log(`🚀 Démarrage ${SERVICE_NAME} MVP...`);
+console.log(`🚀 Démarrage ${SERVICE_NAME}...`);
 
-// MÉTRIQUES SIMPLES (Bloc 4 - Monitoring)
+// MÉTRIQUES SIMPLES (pour compatibilité)
 let requestCount = 0;
 let errorCount = 0;
 let authSuccessCount = 0;
@@ -31,9 +42,13 @@ const startTime = Date.now();
       try {
         await mongoose.connect(process.env.MONGODB_URI);
         console.log("✅ MongoDB connecté");
+        updateDatabaseHealth('mongodb', true);
       } catch (error) {
         console.warn("⚠️ MongoDB non disponible:", error.message);
+        updateDatabaseHealth('mongodb', false);
       }
+    } else {
+      updateDatabaseHealth('mongodb', false);
     }
 
     // SÉCURITÉ OWASP (Bloc 2 - Sécurisation)
@@ -74,22 +89,44 @@ const startTime = Date.now();
     app.use(express.json({ limit: "1mb" }));
     app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
-    // LOGGING ET MÉTRIQUES (Bloc 4 - Monitoring)
+    // MIDDLEWARE DE MÉTRIQUES PROMETHEUS
+    let currentConnections = 0;
+
     app.use((req, res, next) => {
       const start = Date.now();
       requestCount++;
+      currentConnections++;
+      updateActiveConnections(currentConnections);
       
       res.on("finish", () => {
-        const duration = Date.now() - start;
+        const duration = (Date.now() - start) / 1000;
+        currentConnections--;
+        updateActiveConnections(currentConnections);
+
+        // Métriques Prometheus
+        httpRequestDuration.observe(
+          {
+            method: req.method,
+            route: req.route?.path || req.path,
+            status_code: res.statusCode,
+          },
+          duration
+        );
+
+        httpRequestsTotal.inc({
+          method: req.method,
+          route: req.route?.path || req.path,
+          status_code: res.statusCode,
+        });
         
-        // Comptage des erreurs
+        // Comptage des erreurs (compatibilité)
         if (res.statusCode >= 400) {
           errorCount++;
         }
         
         // Logging sécuritaire
         if (req.path.includes('/auth/oauth')) {
-          console.log(`🔐 OAuth: ${req.method} ${req.path} - ${res.statusCode} - ${duration}ms - IP: ${req.ip}`);
+          console.log(`🔐 OAuth: ${req.method} ${req.path} - ${res.statusCode} - ${Math.round(duration * 1000)}ms - IP: ${req.ip}`);
           
           if (res.statusCode === 302) {
             authSuccessCount++;
@@ -97,7 +134,7 @@ const startTime = Date.now();
             authFailureCount++;
           }
         } else {
-          console.log(`${req.method} ${req.path} - ${res.statusCode} - ${duration}ms`);
+          console.log(`${req.method} ${req.path} - ${res.statusCode} - ${Math.round(duration * 1000)}ms`);
         }
       });
       
@@ -126,6 +163,12 @@ const startTime = Date.now();
     // ROUTES OAUTH
     app.use("/auth", authRoutes);
 
+    // MÉTRIQUES PROMETHEUS
+    app.get("/metrics", async (req, res) => {
+      res.set("Content-Type", register.contentType);
+      res.end(await register.metrics());
+    });
+
     // HEALTH CHECK ENRICHI (Bloc 4 - Supervision)
     app.get("/health", (req, res) => {
       const uptime = Date.now() - startTime;
@@ -147,7 +190,8 @@ const startTime = Date.now();
           errorRate: Math.round(errorRate * 100 * 100) / 100, // 2 décimales
           authSuccess: authSuccessCount,
           authFailures: authFailureCount,
-          authSuccessRate: Math.round(authSuccessRate * 100 * 100) / 100
+          authSuccessRate: Math.round(authSuccessRate * 100 * 100) / 100,
+          activeConnections: currentConnections
         },
 
         // Configuration
@@ -180,42 +224,26 @@ const startTime = Date.now();
         health.status = "degraded";
       }
 
-      const statusCode = health.status === "healthy" ? 200 : 503;
+      const isHealthy = health.status === "healthy";
+      updateServiceHealth(SERVICE_NAME, isHealthy);
+
+      const statusCode = isHealthy ? 200 : 503;
       res.status(statusCode).json(health);
     });
 
-    // MONITORING SIMPLE (Bloc 4 - Maintenance)
-    app.get("/metrics", (req, res) => {
-      const uptime = Date.now() - startTime;
-      
-      res.json({
+    // VITALS (Compatible avec les métriques Prometheus)
+    app.get("/vitals", (req, res) => {
+      const vitals = {
         service: SERVICE_NAME,
         timestamp: new Date().toISOString(),
-        
-        // Métriques système
-        system: {
-          uptime: Math.round(uptime / 1000),
-          memory: process.memoryUsage(),
-          cpu: process.cpuUsage()
-        },
-        
-        // Métriques applicatives
-        application: {
-          totalRequests: requestCount,
-          totalErrors: errorCount,
-          errorRate: requestCount > 0 ? (errorCount / requestCount) : 0,
-          requestsPerMinute: Math.round((requestCount / (uptime / 60000)) * 100) / 100
-        },
-        
-        // Métriques OAuth
-        oauth: {
-          totalAuthAttempts: authSuccessCount + authFailureCount,
-          successfulAuth: authSuccessCount,
-          failedAuth: authFailureCount,
-          successRate: (authSuccessCount + authFailureCount) > 0 ? 
-            (authSuccessCount / (authSuccessCount + authFailureCount)) : 0
-        }
-      });
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        cpu: process.cpuUsage(),
+        status: "running",
+        active_connections: currentConnections
+      };
+
+      res.json(vitals);
     });
 
     // DOCUMENTATION API
@@ -223,7 +251,7 @@ const startTime = Date.now();
       res.json({
         service: SERVICE_NAME,
         version: "1.0.0",
-        description: "Service d'authentification OAuth MVP - Conforme RNCP39583",
+        description: "Service d'authentification OAuth - Conforme RNCP39583",
         
         endpoints: {
           "GET /auth/oauth/google": "Initie l'authentification Google OAuth",
@@ -233,7 +261,8 @@ const startTime = Date.now();
           "POST /auth/logout": "Déconnexion utilisateur",
           "GET /auth/providers": "Liste des providers OAuth disponibles",
           "GET /health": "Status du service + métriques",
-          "GET /metrics": "Métriques détaillées (Bloc 4 RNCP)",
+          "GET /vitals": "Informations système (CPU, mémoire)",
+          "GET /metrics": "Métriques Prometheus",
           "GET /docs": "Documentation API"
         },
         
@@ -278,7 +307,7 @@ const startTime = Date.now();
         error: "Route non trouvée",
         service: SERVICE_NAME,
         availableRoutes: [
-          "/health", "/docs", "/metrics", "/providers", 
+          "/health", "/vitals", "/docs", "/metrics", "/providers", 
           "/auth/oauth/google", "/auth/oauth/facebook"
         ]
       });
@@ -296,59 +325,78 @@ const startTime = Date.now();
       });
     });
 
-    // DÉMARRAGE AVEC INFO CONFIG
-    app.listen(PORT, () => {
-      console.log(`✅ ${SERVICE_NAME} MVP démarré sur le port ${PORT}`);
-      console.log(`📋 Documentation: http://localhost:${PORT}/docs`);
-      console.log(`❤️ Health check: http://localhost:${PORT}/health`);
-      console.log(`📊 Métriques: http://localhost:${PORT}/metrics`);
-      console.log(`🔧 Providers: http://localhost:${PORT}/providers`);
-      
-      // Info configuration OAuth
-      const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-      console.log(`🔑 Google OAuth: ${googleConfigured ? 'CONFIGURÉ ✅' : 'NON CONFIGURÉ ❌'}`);
-      if (googleConfigured) {
-        console.log(`   ↳ http://localhost:${PORT}/auth/oauth/google`);
-      }
-      
-      const facebookConfigured = !!(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET);
-      console.log(`🔑 Facebook OAuth: ${facebookConfigured ? 'CONFIGURÉ ✅' : 'NON CONFIGURÉ ❌'}`);
-      if (facebookConfigured) {
-        console.log(`   ↳ http://localhost:${PORT}/auth/oauth/facebook`);
-      }
+    // DÉMARRAGE SEULEMENT SI PAS EN MODE TEST
+    let server;
+    if (process.env.NODE_ENV !== 'test') {
+      server = app.listen(PORT, () => {
+        console.log(`✅ ${SERVICE_NAME} démarré sur le port ${PORT}`);
+        console.log(`📋 Documentation: http://localhost:${PORT}/docs`);
+        console.log(`❤️ Health check: http://localhost:${PORT}/health`);
+        console.log(`📈 Vitals: http://localhost:${PORT}/vitals`);
+        console.log(`📊 Métriques: http://localhost:${PORT}/metrics`);
+        console.log(`🔧 Providers: http://localhost:${PORT}/providers`);
+        
+        // Info configuration OAuth
+        const googleConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+        console.log(`🔑 Google OAuth: ${googleConfigured ? 'CONFIGURÉ ✅' : 'NON CONFIGURÉ ❌'}`);
+        if (googleConfigured) {
+          console.log(`   ↳ http://localhost:${PORT}/auth/oauth/google`);
+          updateExternalServiceHealth('google_oauth', true);
+        }
+        
+        const facebookConfigured = !!(process.env.FACEBOOK_CLIENT_ID && process.env.FACEBOOK_CLIENT_SECRET);
+        console.log(`🔑 Facebook OAuth: ${facebookConfigured ? 'CONFIGURÉ ✅' : 'NON CONFIGURÉ ❌'}`);
+        if (facebookConfigured) {
+          console.log(`   ↳ http://localhost:${PORT}/auth/oauth/facebook`);
+          updateExternalServiceHealth('facebook_oauth', true);
+        }
 
-      // Info base de données
-      const mongoStatus = mongoose.connection.readyState === 1 ? 'CONNECTÉ ✅' : 'NON CONNECTÉ ❌';
-      console.log(`🗄️ MongoDB: ${mongoStatus}`);
+        // Info base de données
+        const mongoStatus = mongoose.connection.readyState === 1 ? 'CONNECTÉ ✅' : 'NON CONNECTÉ ❌';
+        console.log(`🗄️ MongoDB: ${mongoStatus}`);
+        
+        // Avertissements
+        if (!googleConfigured && !facebookConfigured) {
+          console.log(`\n⚠️ ATTENTION: Aucun provider OAuth configuré!`);
+          console.log(`   Ajoutez GOOGLE_CLIENT_ID/SECRET ou FACEBOOK_CLIENT_ID/SECRET dans .env`);
+        }
+        
+        if (!process.env.SESSION_SECRET) {
+          console.log(`⚠️ ATTENTION: SESSION_SECRET non défini, utilisation d'une clé par défaut`);
+        }
+        
+        // Initialisation des métriques
+        updateServiceHealth(SERVICE_NAME, true);
+        
+        console.log(`\n🚀 Service prêt pour M2 !`);
+      });
+    }
+
+    // GRACEFUL SHUTDOWN modifié
+    function gracefulShutdown(signal) {
+      console.log(`🔄 Arrêt du service (${signal})...`);
+      updateServiceHealth(SERVICE_NAME, false);
+      updateActiveConnections(0);
       
-      // Avertissements
-      if (!googleConfigured && !facebookConfigured) {
-        console.log(`\n⚠️ ATTENTION: Aucun provider OAuth configuré!`);
-        console.log(`   Ajoutez GOOGLE_CLIENT_ID/SECRET ou FACEBOOK_CLIENT_ID/SECRET dans .env`);
+      if (server) {
+        server.close(() => {
+          console.log('📴 Serveur fermé');
+          process.exit(0);
+        });
+      } else {
+        process.exit(0);
       }
-      
-      if (!process.env.SESSION_SECRET) {
-        console.log(`⚠️ ATTENTION: SESSION_SECRET non défini, utilisation d'une clé par défaut`);
-      }
-      
-      console.log(`\n🚀 Service prêt pour MVP M2 !`);
-    });
+    }
+
+    process.on("SIGTERM", gracefulShutdown);
+    process.on("SIGINT", gracefulShutdown);
 
   } catch (err) {
     console.error("❌ Erreur fatale au démarrage:", err.message);
+    updateServiceHealth(SERVICE_NAME, false);
     process.exit(1);
   }
 })();
 
-// GRACEFUL SHUTDOWN
-process.on("SIGTERM", () => {
-  console.log("🔄 Arrêt du service...");
-  process.exit(0);
-});
-
-process.on("SIGINT", () => {
-  console.log("🔄 Arrêt du service...");
-  process.exit(0);
-});
-
+// Export pour les tests - IMPORTANT
 module.exports = app;
