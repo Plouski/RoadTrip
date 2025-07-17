@@ -52,6 +52,12 @@ jobs:
           npm ci
       
       - name: 🧪 Run tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          NODE_ENV: test
+          # Autres variables d'environnement si nécessaire
+          DATABASE_URL: sqlite://memory
+          JWT_SECRET: test-secret-key
         run: |
           cd ${{ matrix.service }}
           npm test -- --coverage
