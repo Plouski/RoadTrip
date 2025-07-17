@@ -8,8 +8,13 @@ on:
 
 env:
   NODE_VERSION: '20'
-  DOCKER_REGISTRY: ghcr.io
+  DOCKER_REGISTRY: docker.io
   IMAGE_NAME: ${{ github.repository }}
+
+# Permissions nécessaires pour GHCR
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   # ════════════════════════════════════════════════════════════
@@ -70,7 +75,7 @@ jobs:
           flags: ${{ matrix.service }}
 
   # ════════════════════════════════════════════════════════════
-  # BUILD DOCKER IMAGES
+  # BUILD DOCKER IMAGES (LOCAL BUILD POUR M2)
   # ════════════════════════════════════════════════════════════
   build:
     needs: [lint, tests]
@@ -100,8 +105,8 @@ jobs:
           context: ./${{ matrix.service }}
           push: true
           tags: |
-            ${{ env.DOCKER_REGISTRY }}/roadtrip/${{ matrix.service }}:latest
-            ${{ env.DOCKER_REGISTRY }}/roadtrip/${{ matrix.service }}:${{ github.sha }}
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}:latest
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
