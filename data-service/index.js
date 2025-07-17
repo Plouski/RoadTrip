@@ -24,7 +24,7 @@ console.log(`🚀 Démarrage du ${SERVICE_NAME}...`);
 // VALIDATION VARIABLES D'ENVIRONNEMENT (seulement si pas en test)
 if (process.env.NODE_ENV !== 'test') {
   const requiredEnvVars = {
-    MONGO_URI: process.env.MONGO_URI,
+    MONGODB_URI: process.env.MONGODB_URI,
     JWT_SECRET: process.env.JWT_SECRET,
     JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET
   };
@@ -39,7 +39,7 @@ if (process.env.NODE_ENV !== 'test') {
       console.error(`   - ${varName}`);
     });
     console.error('\n💡 Créez un fichier .env avec ces variables:');
-    console.error('   MONGO_URI=mongodb://localhost:27017/roadtrip-dev');
+    console.error('   MONGODB_URI=mongodb://localhost:27017/roadtrip-dev');
     console.error('   JWT_SECRET=your-secret-key-here');
     console.error('   JWT_REFRESH_SECRET=your-refresh-secret-here');
     process.exit(1);
@@ -364,7 +364,7 @@ app.use((err, req, res, next) => {
 if (process.env.NODE_ENV !== 'test') {
   async function startServer() {
     try {
-      await mongoose.connect(process.env.MONGO_URI);
+      await mongoose.connect(process.env.MONGODB_URI);
       console.log('✅ MongoDB connecté');
       updateDatabaseHealth('mongodb', true);
 

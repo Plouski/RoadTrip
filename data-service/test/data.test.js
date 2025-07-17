@@ -3,7 +3,7 @@ const request = require('supertest');
 // IMPORTANT: Définir NODE_ENV=test AVANT les imports
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret';
-process.env.MONGO_URI = 'mongodb://localhost:27017/test';
+process.env.MONGODB_URI = 'mongodb://localhost:27017/test';
 
 // Mock complet de Mongoose AVANT les imports
 jest.mock('mongoose', () => {
