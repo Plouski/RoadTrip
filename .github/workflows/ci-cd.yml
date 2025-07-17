@@ -11,6 +11,11 @@ env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+# Permissions nécessaires pour GHCR
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # ════════════════════════════════════════════════════════════
   # LINTING & FORMATTING
@@ -100,8 +105,8 @@ jobs:
           context: ./${{ matrix.service }}
           push: true
           tags: |
-            ${{ env.DOCKER_REGISTRY }}/roadtrip/${{ matrix.service }}:latest
-            ${{ env.DOCKER_REGISTRY }}/roadtrip/${{ matrix.service }}:${{ github.sha }}
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}:latest
+            ${{ env.DOCKER_REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
