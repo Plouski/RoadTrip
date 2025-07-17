@@ -8,7 +8,7 @@ on:
 
 env:
   NODE_VERSION: '20'
-  DOCKER_REGISTRY: docker.io
+  DOCKER_REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 # Permissions nécessaires pour GHCR
