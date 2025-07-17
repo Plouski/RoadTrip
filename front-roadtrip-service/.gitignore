@@ -1,27 +1,38 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Node modules
+node_modules/
 
-# dependencies
-/node_modules
+# Output de Next.js
+.next/
+out/
 
-# next.js
-/.next/
-/out/
+# Environnement
+.env
+.env.local
+.env.*.local
 
-# production
-/build
-
-# debug
+# Logs
 npm-debug.log*
+pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+lerna-debug.log*
 
-# env files
-.env*
+# Fichiers de lock si tu choisis un seul gestionnaire :
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
 
-# vercel
-.vercel
+# Test coverage
+coverage/
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
+# Build Tailwind (si applicable)
+tailwind.config.ts
+postcss.config.js
+
+# IntelliJ / VS Code
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
