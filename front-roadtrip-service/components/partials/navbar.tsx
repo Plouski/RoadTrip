@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AuthService } from "@/services/auth-service";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,10 +31,13 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [userRole, setUserRole] = useState(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+
+  const isAdmin = userRole === "admin";
+  const isPremium = userRole === "premium";
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -50,7 +53,7 @@ export default function Navbar() {
           setUserRole(null);
         }
       } catch (error) {
-        console.error("Erreur de vérification d'authentification:", error);
+        console.error("Erreur d'authentification :", error);
         setIsAuthenticated(false);
         setUserRole(null);
       } finally {
@@ -70,29 +73,23 @@ export default function Navbar() {
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
   const handleLogout = async () => {
-    // 1. D'abord nettoyer les états locaux
     setIsAuthenticated(false);
     setUserRole(null);
-
-    // 2. Ensuite appeler le service
     await AuthService.logout();
-
-    // 3. Enfin rediriger
     router.push("/auth");
   };
 
-  const isAdmin = userRole === "admin";
-  const isPremium = userRole === "premium";
-
   const navItems = [
-    { name: "Accueil", href: "/", icon: Home },
+    { name: "Accueil", href: "/", icon: Home, hideWhenAuth: true },
     { name: "Explorer", href: "/explorer", icon: Map },
     { name: "Favoris", href: "/favorites", icon: Heart, requiresAuth: true },
   ];
 
-  const filteredNavItems = navItems.filter(
-    (item) => !item.requiresAuth || isAuthenticated
-  );
+  const filteredNavItems = navItems.filter((item) => {
+    if (item.requiresAuth && !isAuthenticated) return false;
+    if (item.hideWhenAuth && isAuthenticated) return false;
+    return true;
+  });
 
   return (
     <header
@@ -102,60 +99,50 @@ export default function Navbar() {
       )}
     >
       <div className="container flex h-16 items-center justify-between px-4 sm:px-6">
-        {/* Logo + Desktop Nav */}
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center">
-            <div className="hidden sm:block">
-              <Image
-                src="/logo.png"
-                alt="ROADTRIP!"
-                width={180}
-                height={50}
-                className="h-10 w-auto"
-                priority
-              />
-            </div>
-            <div className="block sm:hidden">
-              <Image
-                src="/logo.png"
-                alt="ROADTRIP!"
-                width={40}
-                height={40}
-                className="h-8 w-auto"
-                priority
-              />
-            </div>
+            <Image
+              src="/logo.png"
+              alt="ROADTRIP!"
+              width={180}
+              height={50}
+              className="hidden sm:block h-10 w-auto"
+              priority
+            />
+            <Image
+              src="/logo.png"
+              alt="ROADTRIP!"
+              width={40}
+              height={40}
+              className="block sm:hidden h-8 w-auto"
+              priority
+            />
           </Link>
 
-          {/* Nav Desktop */}
           <nav className="hidden md:flex gap-6">
-            {filteredNavItems.map(({ name, href, icon: Icon }) => {
-              const isActive = pathname === href;
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className={cn(
-                    "flex items-center text-sm font-medium transition-colors relative py-1",
-                    isActive
-                      ? "text-primary"
-                      : "text-gray-600 hover:text-primary"
-                  )}
-                >
-                  <Icon className="mr-1 h-4 w-4" />
-                  {name}
-                  {isActive && (
-                    <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-full" />
-                  )}
-                </Link>
-              );
-            })}
+            {filteredNavItems.map(({ name, href, icon: Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center text-sm font-medium transition-colors relative py-1",
+                  pathname === href
+                    ? "text-primary"
+                    : "text-gray-600 hover:text-primary"
+                )}
+              >
+                <Icon className="mr-1 h-4 w-4" />
+                {name}
+                {pathname === href && (
+                  <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-full" />
+                )}
+              </Link>
+            ))}
           </nav>
         </div>
 
-        {/* Actions Desktop */}
         <div className="hidden md:flex items-center gap-3">
-          {isAuthenticated && isAdmin && (
+          {isAdmin && (
             <Link href="/admin">
               <Button variant="outline" size="sm">
                 <Settings className="mr-2 h-4 w-4" />
@@ -219,9 +206,9 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Burger Menu Button */}
         <div className="md:hidden">
           <button
+            type="button"
             onClick={toggleMenu}
             className="p-2 rounded-md hover:bg-gray-100 transition"
             aria-label="Menu"
@@ -237,7 +224,6 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Menu */}
       {isMenuOpen && (
         <div
           id="mobile-menu"
@@ -289,6 +275,7 @@ export default function Navbar() {
                 <Heart className="h-4 w-4" /> Favoris
               </Link>
               <button
+                type="button"
                 onClick={() => {
                   handleLogout();
                   setIsMenuOpen(false);
@@ -299,22 +286,14 @@ export default function Navbar() {
               </button>
 
               {!isPremium && !isAdmin ? (
-                <Link
-                  href="/premium"
-                  className="block mt-3"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <Button className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90">
+                <Link href="/premium" onClick={() => setIsMenuOpen(false)}>
+                  <Button className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 mt-3">
                     Premium
                   </Button>
                 </Link>
               ) : (
-                <Link
-                  href="/ai"
-                  className="block mt-3"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <Button className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90">
+                <Link href="/ai" onClick={() => setIsMenuOpen(false)}>
+                  <Button className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 mt-3">
                     <Sparkles className="mr-2 h-4 w-4" />
                     IA
                   </Button>

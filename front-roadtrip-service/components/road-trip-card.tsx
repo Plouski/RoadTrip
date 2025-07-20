@@ -9,6 +9,7 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { AuthService } from "@/services/auth-service";
 import LoginPromptModal from "@/components/ui/login-prompt-modal";
+import OptimizedImage from "./ui/optimized-image";
 import { FavoriteService } from "@/services/favorites-service";
 
 interface RoadTripCardProps {
@@ -41,21 +42,14 @@ export default function RoadTripCard({
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const auth = await AuthService.checkAuthentication();
-      setIsAuthenticated(auth);
-    };
-    checkAuth();
+    AuthService.checkAuthentication().then(setIsAuthenticated);
   }, []);
 
   const toggleFavorite = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!isAuthenticated) {
-      setShowLoginPrompt(true);
-      return;
-    }
+    if (!isAuthenticated) return setShowLoginPrompt(true);
 
     try {
       const response = await FavoriteService.toggleFavorite(id);
@@ -65,18 +59,17 @@ export default function RoadTripCard({
     }
   };
 
-  // ✅ PROTECTION : Normaliser les données pour éviter les erreurs
-  const safeTags = Array.isArray(tags) ? tags : 
-                   typeof tags === 'string' ? [tags] : 
-                   [];
-  
-  const safeBudget = typeof budget === 'number' ? budget.toString() : 
-                     typeof budget === 'string' ? budget : 
-                     '0';
-  
-  const safeTitle = title || 'Roadtrip sans titre';
-  const safeCountry = country || 'Destination inconnue';
-  const safeDuration = duration || 1;
+  const safeTags = Array.isArray(tags)
+    ? tags
+    : typeof tags === "string"
+    ? [tags]
+    : [];
+  const safeBudget =
+    typeof budget === "number"
+      ? `${budget} €`
+      : typeof budget === "string"
+      ? budget
+      : "? €";
 
   return (
     <>
@@ -86,33 +79,36 @@ export default function RoadTripCard({
       />
 
       <Card className="border-none shadow-md hover:shadow-lg rounded-xl overflow-hidden transition-all duration-200 hover:scale-[1.02]">
-        <div className="relative">
-          <div className="aspect-[16/9] bg-gray-100 overflow-hidden">
-            <img
-              src={image || "/placeholder.svg"}
-              alt={safeTitle}
-              className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
-              onError={(e) => {
-                e.currentTarget.src = "/placeholder.svg";
-              }}
-            />
-          </div>
+        {/* Image + boutons */}
+        <div className="relative w-full aspect-[16/9] bg-gray-100 overflow-hidden">
+          <OptimizedImage
+            src={image}
+            alt={title || "Image du roadtrip"}
+            fill
+            fallbackSrc="/placeholder.svg"
+            className="hover:scale-105"
+          />
 
-          {/* Bouton favoris */}
+          {/* Favori */}
           <button
             onClick={toggleFavorite}
+            aria-pressed={isFavorite}
+            aria-label={
+              isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"
+            }
             className="absolute right-3 top-3 rounded-full bg-white/90 p-2 backdrop-blur-sm hover:bg-white shadow transition-all duration-200 hover:scale-110"
-            aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
           >
             <Heart
               className={cn(
                 "h-5 w-5 transition-colors duration-200",
-                isFavorite ? "fill-red-600 text-red-600" : "text-gray-600 hover:text-red-500"
+                isFavorite
+                  ? "fill-red-600 text-red-600"
+                  : "text-gray-600 hover:text-red-500"
               )}
             />
           </button>
 
-          {/* Badge Premium */}
+          {/* Premium */}
           {isPremium && (
             <div className="absolute left-3 top-3">
               <Badge className="bg-gradient-to-r from-red-600 to-red-700 text-white shadow-sm">
@@ -122,34 +118,27 @@ export default function RoadTripCard({
           )}
         </div>
 
+        {/* Contenu texte */}
         <CardContent className="p-5">
-          {/* Pays / Durée */}
-          <div className="flex items-center justify-between text-sm text-gray-500 mb-2">
-            <span className="flex items-center gap-1">
-              <span className="text-gray-700 font-medium">{safeCountry}</span>
-              {region && (
-                <>
-                  <span>•</span>
-                  <span>{region}</span>
-                </>
-              )}
+          <div className="flex justify-between text-sm text-gray-500 mb-2">
+            <span className="flex gap-1 items-center text-gray-700 font-medium">
+              {country}
+              {region && <>• {region}</>}
             </span>
-            <span className="bg-gray-100 px-2 py-1 rounded-full text-xs font-medium">
-              {safeDuration} jour{safeDuration > 1 ? 's' : ''}
+            <span className="bg-gray-200 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">
+              {duration} jour{duration > 1 ? "s" : ""}
             </span>
           </div>
 
-          {/* Titre */}
           <h3 className="text-lg font-semibold mb-2 line-clamp-2 text-gray-900 leading-tight">
-            {safeTitle}
+            {title || "Roadtrip sans titre"}
           </h3>
 
-          {/* Tags */}
           <div className="mb-3 flex flex-wrap gap-1">
             {safeTags.length > 0 ? (
               <>
-                {safeTags.slice(0, 3).map((tag, index) => (
-                  <Badge key={`${tag}-${index}`} variant="secondary" className="text-xs">
+                {safeTags.slice(0, 3).map((tag, i) => (
+                  <Badge key={i} variant="secondary" className="text-xs">
                     {tag}
                   </Badge>
                 ))}
@@ -160,26 +149,27 @@ export default function RoadTripCard({
                 )}
               </>
             ) : (
-              <Badge variant="outline" className="text-xs text-gray-400">
+              <Badge
+                variant="secondary"
+                className="text-xs text-gray-800 bg-gray-200"
+              >
                 Aventure
               </Badge>
             )}
           </div>
 
-          {/* Budget */}
           <div className="text-sm">
             <span className="text-red-600 font-semibold text-base">
-              {safeBudget}€
+              {safeBudget}
             </span>
-            <span className="text-gray-500 font-normal ml-1">estimé</span>
+            <span className="text-gray-500 ml-1">estimé</span>
           </div>
         </CardContent>
 
+        {/* Bouton en savoir plus */}
         <CardFooter className="p-5 pt-0">
           <Link href={`/roadtrip/${id}`} className="w-full">
-            <Button className="w-full bg-primary hover:bg-primary/90 transition-colors duration-200">
-              En savoir plus
-            </Button>
+            <Button className="w-full">En savoir plus</Button>
           </Link>
         </CardFooter>
       </Card>

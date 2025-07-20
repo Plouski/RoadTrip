@@ -9,7 +9,6 @@ import { AlertMessage } from "@/components/ui/alert-message";
 import { Users, Map, BarChart3 } from "lucide-react";
 import RoadtripsListPage from "./roadtrip/page";
 import UsersListPage from "./user/page";
-import PushManager from "@/components/pushManager";
 import DashboardOverview from "./dashboard/page";
 
 interface User {
@@ -67,7 +66,6 @@ export default function AdminDashboard() {
 
   return (
     <>
-      {user && <PushManager userId={user.id} />}
       <div className="container py-10">
         <div className="flex flex-col gap-6">
           {alertMessage && (
