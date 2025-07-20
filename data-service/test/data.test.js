@@ -1,11 +1,9 @@
 const request = require('supertest');
 
-// IMPORTANT: Définir NODE_ENV=test AVANT les imports
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-secret';
 process.env.MONGODB_URI = 'mongodb://localhost:27017/test';
 
-// Mock complet de Mongoose AVANT les imports
 jest.mock('mongoose', () => {
   const mockSchema = jest.fn().mockImplementation(() => ({
     methods: {},
@@ -14,7 +12,6 @@ jest.mock('mongoose', () => {
     post: jest.fn()
   }));
   
-  // Mock des Types avec ObjectId
   mockSchema.Types = {
     ObjectId: jest.fn().mockImplementation((id) => ({ _id: id || 'mock-object-id' }))
   };
@@ -91,7 +88,7 @@ global.fetch = jest.fn().mockResolvedValue({
 // Import de l'app APRÈS tous les mocks
 const app = require('../index');
 
-describe('💾 Data Service M2 Tests', () => {
+describe('Data Service Tests', () => {
   
   test('✅ Health check fonctionne', async () => {
     const res = await request(app).get('/health');
@@ -100,10 +97,20 @@ describe('💾 Data Service M2 Tests', () => {
     expect(res.body.dependencies).toBeDefined();
   });
 
-  test('✅ API Roadtrips accessible (mode mock)', async () => {
+  test('✅ API Roadtrips accessible', async () => {
     const res = await request(app).get('/api/roadtrips');
     expect(res.statusCode).toBe(200);
     expect(res.body.status).toBe('mock');
+  });
+
+  test('✅ Route 404 gérée correctement', async () => {
+    const res = await request(app)
+      .get('/route-inexistante')
+      .expect(404);
+    
+    expect(res.body.error).toBe('Route non trouvée');
+    expect(res.body.service).toBe('data-service');
+    expect(res.body.availableRoutes).toBeDefined();
   });
 
   test('✅ Documentation API disponible', async () => {
@@ -142,21 +149,10 @@ describe('💾 Data Service M2 Tests', () => {
     expect([200, 500]).toContain(res.statusCode);
     
     if (res.statusCode === 200) {
-      // Les métriques utilisent le préfixe "service_" par défaut
       expect(res.text).toContain('service_health_status');
       expect(res.text).toContain('http_requests_total');
       expect(res.text).toContain('data-service');
     }
-  });
-
-  test('✅ Route 404 gérée correctement', async () => {
-    const res = await request(app)
-      .get('/route-inexistante')
-      .expect(404);
-    
-    expect(res.body.error).toBe('Route non trouvée');
-    expect(res.body.service).toBe('data-service');
-    expect(res.body.availableRoutes).toBeDefined();
   });
 
   test('✅ API Auth mock fonctionne', async () => {
