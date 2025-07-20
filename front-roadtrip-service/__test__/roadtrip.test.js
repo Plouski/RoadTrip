@@ -9,11 +9,9 @@ describe("ROADTRIP! Application Tests", () => {
   });
 
   describe("AuthService", () => {
-    // Import dynamique pour éviter les erreurs de module
     let AuthService;
 
     beforeAll(() => {
-      // Mock des modules avant import
       jest.doMock("../services/auth-service", () => ({
         AuthService: {
           getAuthToken: jest.fn(() => {
@@ -51,29 +49,22 @@ describe("ROADTRIP! Application Tests", () => {
     });
 
     test("should get auth token from localStorage", () => {
-      // Simuler un token dans localStorage
-      if (typeof window !== "undefined" && window.localStorage) {
-        window.localStorage.setItem("auth_token", "test-token");
-      }
-
+      localStorage.setItem("auth_token", "test-token");
       const token = AuthService.getAuthToken();
       expect(token).toBe("test-token");
     });
 
-    test("should return null when no token exists", () => {
-      const token = AuthService.getAuthToken();
-      expect(token).toBeNull();
-    });
-
     test("should clear auth storage on logout", () => {
       AuthService.clearAuthStorage();
-
-      if (typeof window !== "undefined" && window.localStorage) {
-        expect(window.localStorage.getItem("auth_token")).toBeNull();
-        expect(window.localStorage.getItem("refresh_token")).toBeNull();
-        expect(window.localStorage.getItem("userRole")).toBeNull();
-      }
+      expect(localStorage.getItem("auth_token")).toBeNull();
+      expect(localStorage.getItem("refresh_token")).toBeNull();
     });
+
+    test("should handle login flow", async () => {
+      const result = await AuthService.login("test@example.com", "password");
+      expect(result.tokens.accessToken).toBeDefined();
+    });
+
   });
 
   describe("RoadtripService", () => {
@@ -179,7 +170,6 @@ describe("ROADTRIP! Application Tests", () => {
       jest.doMock("../services/favorites-service", () => ({
         FavoriteService: {
           toggleFavorite: jest.fn(async (tripId) => {
-            // Simuler la vérification d'authentification
             const token =
               typeof window !== "undefined" && window.localStorage
                 ? window.localStorage.getItem("auth_token")

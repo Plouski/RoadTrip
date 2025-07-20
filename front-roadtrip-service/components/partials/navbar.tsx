@@ -70,9 +70,14 @@ export default function Navbar() {
   const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
 
   const handleLogout = async () => {
-    await AuthService.logout();
+    // 1. D'abord nettoyer les états locaux
     setIsAuthenticated(false);
     setUserRole(null);
+
+    // 2. Ensuite appeler le service
+    await AuthService.logout();
+
+    // 3. Enfin rediriger
     router.push("/auth");
   };
 

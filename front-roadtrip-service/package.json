@@ -1,5 +1,5 @@
 {
-"name": "front-roastrip-service",
+  "name": "front-roastrip-service",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -13,7 +13,9 @@
   },
   "jest": {
     "testEnvironment": "jsdom",
-    "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.js"
+    ],
     "moduleNameMapper": {
       "\\.(css|less|scss|sass)$": "identity-obj-proxy",
       "\\.(jpg|jpeg|png|gif|webp|svg)$": "<rootDir>/__mocks__/fileMock.js",
@@ -30,14 +32,26 @@
       "!**/*.d.ts",
       "!**/node_modules/**"
     ],
-    "coverageReporters": ["text", "lcov", "html"],
-    "moduleFileExtensions": ["js", "jsx", "ts", "tsx", "json"],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
+    "moduleFileExtensions": [
+      "js",
+      "jsx",
+      "ts",
+      "tsx",
+      "json"
+    ],
     "testPathIgnorePatterns": [
       "<rootDir>/.next/",
       "<rootDir>/node_modules/"
     ],
     "transform": {
-      "^.+\\.(js|jsx|ts|tsx)$": ["@swc/jest"]
+      "^.+\\.(js|jsx|ts|tsx)$": [
+        "@swc/jest"
+      ]
     }
   },
   "dependencies": {
@@ -59,10 +73,10 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
     "lucide-react": "^0.454.0",
-    "next": "15.2.4",
+    "next": "^15.4.2",
     "next-themes": "^0.4.4",
-    "react": "^19",
-    "react-dom": "^19",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
     "sonner": "^1.7.1",
@@ -73,6 +87,8 @@
     "@babel/preset-env": "^7.28.0",
     "@babel/preset-react": "^7.27.1",
     "@babel/preset-typescript": "^7.27.1",
+    "@swc/core": "^1.13.1",
+    "@swc/jest": "^0.2.39",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@types/react": "^19",
