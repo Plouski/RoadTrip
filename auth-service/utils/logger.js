@@ -446,7 +446,9 @@ logger.getStats = () => {
 };
 
 // Nettoyage automatique au démarrage
-if (enableFileLogging) {
+const isTest = process.env.NODE_ENV === 'test';
+
+if (enableFileLogging && !isTest) {
   setTimeout(() => {
     logger.cleanup();
   }, 5000);
