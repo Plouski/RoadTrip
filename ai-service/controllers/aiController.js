@@ -8,16 +8,49 @@ const askRoadtripAdvisor = async (req, res) => {
   const input = prompt || query;
 
   if (!input) {
+    logger.warn('Requête IA sans prompt', {
+      userId: params.userId,
+      conversationId: params.conversationId,
+      requestId: req.id,
+      ip: req.ip
+    });
     return res.status(400).json({ error: "Le champ 'prompt' est requis." });
   }
 
   const start = process.hrtime();
   
+  logger.ai('🤖 Nouvelle demande roadtrip advisor', {
+    userId: params.userId,
+    conversationId: params.conversationId,
+    promptLength: input.length,
+    location: params.location,
+    duration: params.duration,
+    budget: params.budget,
+    travelStyle: params.travelStyle,
+    interests: params.interests?.length || 0,
+    includeWeather: params.includeWeather,
+    requestId: req.id
+  });
+  
   try {
     const result = await roadtripAdvisorService({ query: input, ...params });
 
+    // Calculer le temps de traitement
+    const [seconds, nanoseconds] = process.hrtime(start);
+    const processingTime = seconds * 1000 + nanoseconds / 1000000;
+
     if (result.type === 'error') {
       if (result.max_duration && result.requested_duration) {
+        logger.warn('Demande roadtrip avec durée excessive', {
+          userId: params.userId,
+          conversationId: params.conversationId,
+          requestedDuration: result.requested_duration,
+          maxDuration: result.max_duration,
+          processingTime: Math.round(processingTime),
+          errorType: 'validation_duration',
+          requestId: req.id
+        });
+
         return res.status(200).json({
           role: 'assistant',
           content: result.message,
@@ -28,6 +61,16 @@ const askRoadtripAdvisor = async (req, res) => {
           details: result
         });
       } else if (result.error_type === 'invalid_topic') {
+        logger.security('Tentative de requête hors-sujet détectée', {
+          userId: params.userId,
+          conversationId: params.conversationId,
+          prompt: input.substring(0, 100) + '...',
+          processingTime: Math.round(processingTime),
+          errorType: 'invalid_topic',
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          requestId: req.id
+        });
         
         return res.status(200).json({
           role: 'assistant',
@@ -39,12 +82,42 @@ const askRoadtripAdvisor = async (req, res) => {
           details: result
         });
       } else {
-        logger.error("💥 Erreur technique dans roadtripAdvisorService:", result);
+        logger.error("💥 Erreur technique dans roadtripAdvisorService", {
+          userId: params.userId,
+          conversationId: params.conversationId,
+          error: result,
+          processingTime: Math.round(processingTime),
+          requestId: req.id
+        });
         return res.status(500).json(result);
       }
     }
 
     const formattedContent = formatRoadtripResponse(result);
+    
+    logger.ai('✅ Roadtrip généré avec succès', {
+      userId: params.userId,
+      conversationId: params.conversationId,
+      destination: result.destination,
+      duration: result.duree_recommandee,
+      budgetEstimate: result.budget_estime?.montant,
+      itineraryDays: result.itineraire?.length || 0,
+      hasWeatherData: !!result.meteo_actuelle,
+      processingTime: Math.round(processingTime),
+      contentLength: formattedContent.length,
+      requestId: req.id
+    });
+
+    if (processingTime > 5000) {
+      logger.performance('Génération IA lente détectée', {
+        userId: params.userId,
+        conversationId: params.conversationId,
+        processingTime: Math.round(processingTime),
+        promptLength: input.length,
+        destination: result.destination,
+        requestId: req.id
+      });
+    }
     
     const response = {
       role: 'assistant',
@@ -56,7 +129,22 @@ const askRoadtripAdvisor = async (req, res) => {
     res.status(200).json(response);
 
   } catch (error) {
-    logger.error("💥 Erreur IA:", error);
+    const [seconds, nanoseconds] = process.hrtime(start);
+    const processingTime = seconds * 1000 + nanoseconds / 1000000;
+
+    logger.error("💥 Erreur IA critique", {
+      userId: params.userId,
+      conversationId: params.conversationId,
+      error: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      },
+      processingTime: Math.round(processingTime),
+      promptLength: input.length,
+      requestId: req.id
+    });
+
     res.status(500).json({ error: "Erreur serveur IA." });
   }
 };
@@ -134,8 +222,24 @@ const saveConversation = async (req, res) => {
   const userId = req.user?.userId;
 
   if (!role || !content || !conversationId) {
+    logger.warn('Tentative de sauvegarde avec données incomplètes', {
+      userId,
+      conversationId,
+      hasRole: !!role,
+      hasContent: !!content,
+      hasConversationId: !!conversationId,
+      requestId: req.id
+    });
     return res.status(400).json({ error: "Données de conversation incomplètes." });
   }
+
+  logger.info('💾 Sauvegarde message conversation', {
+    userId,
+    conversationId,
+    role,
+    contentLength: content.length,
+    requestId: req.id
+  });
 
   try {
     const message = await dataService.createMessage({ 
@@ -145,19 +249,42 @@ const saveConversation = async (req, res) => {
       conversationId 
     });
 
+    logger.info('✅ Message sauvegardé avec succès', {
+      userId,
+      conversationId,
+      messageId: message.id,
+      role,
+      requestId: req.id
+    });
+
     res.status(201).json({ success: true, message });
 
   } catch (error) {
-    logger.error("💥 Erreur saveConversation :", error);
+    logger.error("💥 Erreur saveConversation", {
+      userId,
+      conversationId,
+      role,
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      requestId: req.id
+    });
+    
     res.status(500).json({ error: "Erreur serveur." });
   }
 };
 
 /* Récupère tout l'historique des conversations utilisateur */
 const getHistory = async (req, res) => {
+  const userId = req.user?.userId;
+
+  logger.info('📚 Récupération historique utilisateur', {
+    userId,
+    requestId: req.id
+  });
+
   try {
-    const userId = req.user.userId;
-    
     const messages = await dataService.getMessagesByUser(userId);
 
     const grouped = messages.reduce((acc, msg) => {
@@ -167,10 +294,28 @@ const getHistory = async (req, res) => {
       return acc;
     }, {});
 
+    const conversationsCount = Object.keys(grouped).length;
+    const totalMessages = messages.length;
+
+    logger.info('✅ Historique récupéré avec succès', {
+      userId,
+      conversationsCount,
+      totalMessages,
+      requestId: req.id
+    });
+
     res.status(200).json(grouped);
 
   } catch (error) {
-    logger.error("💥 Erreur getHistory :", error);
+    logger.error("💥 Erreur getHistory", {
+      userId,
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      requestId: req.id
+    });
+    
     res.status(500).json({ error: "Erreur serveur." });
   }
 };
@@ -180,17 +325,42 @@ const deleteHistory = async (req, res) => {
   const userId = req.user?.userId;
   
   if (!userId) {
+    logger.security('Tentative de suppression historique sans authentification', {
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      requestId: req.id
+    });
     return res.status(401).json({ error: "Non authentifié." });
   }
 
+  logger.warn('🗑️ Suppression complète historique utilisateur', {
+    userId,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    requestId: req.id
+  });
+
   try {
-    await dataService.deleteMessagesByUser(userId);
+    const result = await dataService.deleteMessagesByUser(userId);
     
-    logger.info(`Historique supprimé pour utilisateur: ${userId}`);
+    logger.info(`✅ Historique supprimé avec succès`, {
+      userId,
+      deletedCount: result.deletedCount || 'unknown',
+      requestId: req.id
+    });
+    
     res.status(200).json({ success: true });
 
   } catch (error) {
-    logger.error("💥 Erreur deleteHistory :", error);
+    logger.error("💥 Erreur deleteHistory", {
+      userId,
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      requestId: req.id
+    });
+    
     res.status(500).json({ error: "Erreur serveur." });
   }
 };
@@ -201,16 +371,42 @@ const getConversationById = async (req, res) => {
   const userId = req.user?.userId;
 
   if (!conversationId) {
+    logger.warn('Récupération conversation sans ID', {
+      userId,
+      requestId: req.id
+    });
     return res.status(400).json({ error: "ID de conversation manquant." });
   }
+
+  logger.info('📖 Récupération conversation spécifique', {
+    userId,
+    conversationId,
+    requestId: req.id
+  });
 
   try {
     const messages = await dataService.getMessagesByConversation(userId, conversationId);
     
+    logger.info('✅ Conversation récupérée avec succès', {
+      userId,
+      conversationId,
+      messagesCount: messages.length,
+      requestId: req.id
+    });
+    
     res.status(200).json(messages);
 
   } catch (error) {
-    logger.error("💥 Erreur getConversationById :", error);
+    logger.error("💥 Erreur getConversationById", {
+      userId,
+      conversationId,
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      requestId: req.id
+    });
+    
     res.status(500).json({ error: "Erreur serveur." });
   }
 };
@@ -221,24 +417,56 @@ const deleteConversation = async (req, res) => {
   const userId = req.user?.userId;
 
   if (!conversationId) {
+    logger.warn('Suppression conversation sans ID', {
+      userId,
+      requestId: req.id
+    });
     return res.status(400).json({ error: "ID de conversation manquant." });
   }
   
   if (!userId) {
+    logger.security('Tentative de suppression conversation sans authentification', {
+      conversationId,
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      requestId: req.id
+    });
     return res.status(401).json({ error: "Non authentifié." });
   }
 
+  logger.warn('🗑️ Suppression conversation spécifique', {
+    userId,
+    conversationId,
+    ip: req.ip,
+    requestId: req.id
+  });
+
   try {
-    await dataService.deleteConversation(userId, conversationId);
+    const result = await dataService.deleteConversation(userId, conversationId);
     
-    logger.info(`Conversation supprimée: ${conversationId} pour utilisateur: ${userId}`);
+    logger.info(`✅ Conversation supprimée avec succès`, {
+      userId,
+      conversationId,
+      deletedCount: result.deletedCount || 'unknown',
+      requestId: req.id
+    });
+    
     res.status(200).json({ 
       success: true, 
       message: "Conversation supprimée avec succès." 
     });
 
   } catch (error) {
-    logger.error("💥 Erreur deleteConversation :", error);
+    logger.error("💥 Erreur deleteConversation", {
+      userId,
+      conversationId,
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      requestId: req.id
+    });
+    
     res.status(500).json({ error: "Erreur serveur." });
   }
 };
