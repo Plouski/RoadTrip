@@ -4,5 +4,6 @@ ai-service : ok
 auth-service : ok
 data-service :
 metrics-service : ok
-notification-service : 
-paiement-service :
+notification-service : ok
+paiement-service : ok
+front-service :
