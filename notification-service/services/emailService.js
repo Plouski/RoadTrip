@@ -1,8 +1,9 @@
 const nodemailer = require("nodemailer");
 const mailjetTransport = require("nodemailer-mailjet-transport");
+const logger = require("../utils/logger");
 
 if (!process.env.MAILJET_API_KEY || !process.env.MAILJET_API_SECRET) {
-  console.warn("⚠️ Mailjet non configuré - emails simulés");
+  logger.warn("Mailjet non configuré - les emails seront simulés");
 }
 
 let transporter = null;
@@ -16,7 +17,7 @@ if (process.env.MAILJET_API_KEY && process.env.MAILJET_API_SECRET) {
       },
     })
   );
-  console.log("✅ Mailjet configuré - emails réels activés");
+  logger.info("Mailjet configuré - envoi réel d'emails activé");
 }
 
 const createConfirmationEmail = (token) => {
@@ -64,45 +65,78 @@ const createResetEmail = (code) => {
 };
 
 const EmailService = {
-  
   sendConfirmationEmail: async (email, token) => {
     if (!transporter) {
-      throw new Error('Configuration Mailjet manquante');
+      logger.error("Envoi email de confirmation impossible : Mailjet non configuré");
+      throw new Error("Configuration Mailjet manquante");
     }
 
-    console.log(`📧 Envoi email confirmation Mailjet à ${email}`);
-    
-    const { subject, html } = createConfirmationEmail(token);
-    
-    const result = await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME || 'ROADTRIP'}" <${process.env.EMAIL_FROM_ADDRESS || 'noreply@roadtrip.fr'}>`,
-      to: email,
-      subject,
-      html
-    });
+    logger.info("Tentative d'envoi d'un email de confirmation", { type: "email", action: "confirmation", email });
 
-    console.log(`✅ Email confirmation Mailjet envoyé:`, result.messageId);
-    return result;
+    try {
+      const { subject, html } = createConfirmationEmail(token);
+
+      const result = await transporter.sendMail({
+        from: `"${process.env.EMAIL_FROM_NAME || 'ROADTRIP'}" <${process.env.EMAIL_FROM_ADDRESS || 'noreply@roadtrip.fr'}>`,
+        to: email,
+        subject,
+        html
+      });
+
+      logger.info("Email de confirmation envoyé avec succès", {
+        type: "email",
+        action: "confirmation",
+        email,
+        messageId: result.messageId
+      });
+
+      return result;
+    } catch (err) {
+      logger.error("Erreur lors de l'envoi de l'email de confirmation", {
+        type: "email",
+        action: "confirmation",
+        email,
+        error: err.message
+      });
+      throw err;
+    }
   },
 
   sendPasswordResetEmail: async (email, code) => {
     if (!transporter) {
-      throw new Error('Configuration Mailjet manquante');
+      logger.error("Envoi email de réinitialisation impossible : Mailjet non configuré");
+      throw new Error("Configuration Mailjet manquante");
     }
 
-    console.log(`📧 Envoi email reset Mailjet à ${email}`);
-    
-    const { subject, html } = createResetEmail(code);
-    
-    const result = await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME || 'ROADTRIP'}" <${process.env.EMAIL_FROM_ADDRESS || 'noreply@roadtrip.fr'}>`,
-      to: email,
-      subject,
-      html
-    });
+    logger.info("Tentative d'envoi d'un email de réinitialisation", { type: "email", action: "reset", email });
 
-    console.log(`✅ Email reset Mailjet envoyé:`, result.messageId);
-    return result;
+    try {
+      const { subject, html } = createResetEmail(code);
+
+      const result = await transporter.sendMail({
+        from: `"${process.env.EMAIL_FROM_NAME || 'ROADTRIP'}" <${process.env.EMAIL_FROM_ADDRESS || 'noreply@roadtrip.fr'}>`,
+        to: email,
+        subject,
+        html
+      });
+
+      logger.info("Email de réinitialisation envoyé avec succès", {
+        type: "email",
+        action: "reset",
+        email,
+        messageId: result.messageId
+      });
+
+      return result;
+    } catch (err) {
+      logger.error("Erreur lors de l'envoi de l'email de réinitialisation", {
+        type: "email",
+        action: "reset",
+        email,
+        error: err.message
+      });
+      throw err;
+    }
   }
 };
 

@@ -1,7 +1,8 @@
 # RoadTrip-
 
-ai-service :
+ai-service : ok
 auth-service : ok
-data-service : presque ok
-metrics-service :
-notification-service : ok
+data-service :
+metrics-service : ok
+notification-service : 
+paiement-service :
