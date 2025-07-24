@@ -2,16 +2,29 @@ const { OpenAI } = require("openai");
 const dotenv = require("dotenv");
 const NodeCache = require("node-cache");
 const axios = require("axios");
+const logger = require("../utils/logger");
 
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const cache = new NodeCache({ stdTTL: 3600 });
 
+logger.info('🚀 Service IA initialisé', {
+  hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+  hasWeatherKey: !!process.env.WEATHER_API_KEY,
+  cacheConfig: { stdTTL: 3600 }
+});
+
 // Validation du contenu roadtrip
 const isRoadtripRelated = (query) => {
+  const startTime = Date.now();
+  
   try {
     if (!query || typeof query !== 'string') {
+      logger.debug('Validation échouée: query invalide', { 
+        queryType: typeof query,
+        hasQuery: !!query 
+      });
       return false;
     }
 
@@ -66,20 +79,36 @@ const isRoadtripRelated = (query) => {
       pattern.test(queryLower)
     );
 
-    console.log(`🔍 Validation roadtrip pour: "${query}"`);
-    console.log(`   - Mots-clés détectés: ${hasKeyword}`);
-    console.log(`   - Patterns détectés: ${hasPattern}`);
+    const isValid = hasKeyword || hasPattern;
+    const processingTime = Date.now() - startTime;
+
+    logger.debug('🔍 Validation roadtrip terminée', {
+      query: query.substring(0, 50) + (query.length > 50 ? '...' : ''),
+      queryLength: query.length,
+      hasKeyword,
+      hasPattern,
+      isValid,
+      processingTime
+    });
     
-    return hasKeyword || hasPattern;
+    return isValid;
     
   } catch (error) {
-    console.error("❌ Erreur dans isRoadtripRelated:", error.message);
+    logger.error("❌ Erreur dans isRoadtripRelated", {
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      query: query ? query.substring(0, 100) : null
+    });
     return false;
   }
 };
 
 // Extraction de la durée depuis la requête
 const extractDurationFromQuery = (query) => {
+  const startTime = Date.now();
+  
   try {
     if (!query || typeof query !== 'string') {
       return null;
@@ -96,6 +125,8 @@ const extractDurationFromQuery = (query) => {
       return null;
     }
     
+    let extractedDuration = null;
+    
     for (const numberStr of numberMatches) {
       const num = parseInt(numberStr, 10);
       
@@ -104,27 +135,49 @@ const extractDurationFromQuery = (query) => {
       }
       
       if (monthKeywords.some(keyword => queryLower.includes(keyword))) {
-        return num * 30;
+        extractedDuration = num * 30;
+        break;
       }
       
       if (weekKeywords.some(keyword => queryLower.includes(keyword))) {
-        return num * 7;
+        extractedDuration = num * 7;
+        break;
       }
       
       if (dayKeywords.some(keyword => queryLower.includes(keyword))) {
-        return num;
+        extractedDuration = num;
+        break;
       }
     }
     
-    return null;
+    const processingTime = Date.now() - startTime;
+    
+    if (extractedDuration) {
+      logger.debug('📅 Durée extraite avec succès', {
+        query: query.substring(0, 50) + '...',
+        extractedDuration,
+        unit: extractedDuration > 30 ? 'months' : extractedDuration > 7 ? 'weeks' : 'days',
+        processingTime
+      });
+    }
+    
+    return extractedDuration;
   } catch (error) {
-    console.error("❌ Erreur dans extractDurationFromQuery:", error.message);
+    logger.error("❌ Erreur dans extractDurationFromQuery", {
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      query: query ? query.substring(0, 100) : null
+    });
     return null;
   }
 };
 
 // Service principal pour générer un itinéraire de roadtrip personnalisé
 const roadtripAdvisorService = async (options) => {
+  const serviceStart = Date.now();
+  
   try {
     const {
       query,
@@ -136,10 +189,23 @@ const roadtripAdvisorService = async (options) => {
       includeWeather = false,
     } = options;
 
-    console.log("🔍 Requête reçue:", query);
+    logger.ai('🚀 Début génération roadtrip', {
+      query: query ? query.substring(0, 100) + '...' : null,
+      location,
+      duration,
+      budget,
+      travelStyle,
+      interestsCount: interests.length,
+      includeWeather
+    });
 
     if (!isRoadtripRelated(query)) {
-      console.log("❌ Requête non liée aux roadtrips détectée");
+      logger.security('❌ Requête non-roadtrip détectée', {
+        query: query ? query.substring(0, 50) + '...' : null,
+        queryLength: query ? query.length : 0,
+        processingTime: Date.now() - serviceStart
+      });
+      
       return {
         type: "error",
         message: "❌ Je suis un assistant spécialisé dans les roadtrips et voyages. Je ne peux vous aider que pour planifier des itinéraires de voyage, conseiller des destinations, ou organiser des roadtrips. Pourriez-vous me poser une question liée aux voyages ?",
@@ -151,11 +217,16 @@ const roadtripAdvisorService = async (options) => {
     
     if (!finalDuration && query) {
       finalDuration = extractDurationFromQuery(query);
-      console.log("📅 Durée extraite:", finalDuration);
     }
 
     if (finalDuration && finalDuration > 14) {
-      console.log("⚠️ Durée dépassée:", finalDuration, "jours > 14 jours");
+      logger.warn("⚠️ Durée demandée excessive", {
+        requestedDuration: finalDuration,
+        maxDuration: 14,
+        query: query ? query.substring(0, 50) + '...' : null,
+        processingTime: Date.now() - serviceStart
+      });
+      
       return {
         type: "error",
         message: "❌ La durée maximale pour un roadtrip est de 2 semaines (14 jours). Veuillez réduire la durée de votre voyage.",
@@ -166,17 +237,36 @@ const roadtripAdvisorService = async (options) => {
 
     const cacheKey = generateCacheKey(options);
     if (cache.has(cacheKey)) {
-      console.log("✅ Réponse récupérée depuis le cache.");
-      return cache.get(cacheKey);
+      const cachedResult = cache.get(cacheKey);
+      logger.ai('✅ Résultat récupéré depuis le cache', {
+        cacheKey: cacheKey.substring(0, 20) + '...',
+        destination: cachedResult.destination,
+        processingTime: Date.now() - serviceStart
+      });
+      return cachedResult;
     }
 
     let weatherInfo = null;
     let contextAddition = "";
 
     if (location && includeWeather) {
+      const weatherStart = Date.now();
       weatherInfo = await getWeatherData(location);
+      const weatherTime = Date.now() - weatherStart;
+      
       if (weatherInfo) {
         contextAddition += `Météo actuelle à ${location} : ${weatherInfo.condition}, ${weatherInfo.temperature}°C.`;
+        logger.info('🌤️ Données météo récupérées', {
+          location,
+          condition: weatherInfo.condition,
+          temperature: weatherInfo.temperature,
+          weatherTime
+        });
+      } else {
+        logger.warn('⚠️ Impossible de récupérer les données météo', {
+          location,
+          weatherTime
+        });
       }
     }
 
@@ -190,6 +280,14 @@ const roadtripAdvisorService = async (options) => {
 
     const userPrompt = query;
 
+    logger.ai('🤖 Appel OpenAI en cours', {
+      model: 'gpt-4o',
+      systemPromptLength: systemPrompt.length,
+      userPromptLength: userPrompt.length,
+      temperature: 0.7
+    });
+
+    const openaiStart = Date.now();
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -199,13 +297,29 @@ const roadtripAdvisorService = async (options) => {
       temperature: 0.7,
       response_format: { type: "json_object" },
     });
+    const openaiTime = Date.now() - openaiStart;
 
     const content = response?.choices?.[0]?.message?.content;
     if (!content) {
+      logger.error('❌ OpenAI n\'a pas généré de contenu', {
+        response: response?.choices || null,
+        openaiTime
+      });
       return { type: "error", message: "Aucune réponse générée." };
     }
 
-    const parsed = JSON.parse(content);
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (parseError) {
+      logger.error('❌ Erreur parsing JSON OpenAI', {
+        error: parseError.message,
+        content: content.substring(0, 200) + '...',
+        openaiTime
+      });
+      return { type: "error", message: "Réponse invalide de l'IA." };
+    }
+
     const finalResponse = {
       ...parsed,
       generated_at: new Date().toISOString(),
@@ -220,9 +334,39 @@ const roadtripAdvisorService = async (options) => {
     };
 
     cache.set(cacheKey, finalResponse);
+    
+    const totalTime = Date.now() - serviceStart;
+    
+    logger.ai('✅ Roadtrip généré avec succès', {
+      destination: finalResponse.destination,
+      duration: finalResponse.duree_recommandee,
+      budget: finalResponse.budget_estime?.montant,
+      itineraryDays: finalResponse.itineraire?.length || 0,
+      hasWeatherData: !!finalResponse.meteo_actuelle,
+      openaiTime,
+      totalTime,
+      cached: false
+    });
+
     return finalResponse;
   } catch (error) {
-    console.error("❌ Erreur dans roadtripAdvisorService :", error.message);
+    const totalTime = Date.now() - serviceStart;
+    
+    logger.error("❌ Erreur critique dans roadtripAdvisorService", {
+      error: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      },
+      options: {
+        location: options.location,
+        duration: options.duration,
+        budget: options.budget,
+        queryLength: options.query?.length || 0
+      },
+      totalTime
+    });
+    
     return {
       type: "error",
       message: "Erreur lors de la génération des recommandations.",
@@ -290,28 +434,54 @@ Utilise des lieux réels, donne des conseils utiles, et adapte les suggestions a
     prompt += `Incorpore ces informations dans l'itinéraire, les activités ou les conseils.`;
   }
 
+  logger.debug('🎯 System prompt créé', {
+    promptLength: prompt.length,
+    hasTravelStyle: !!travelStyle,
+    hasDuration: !!duration,
+    hasBudget: !!budget,
+    interestsCount: interests?.length || 0,
+    hasContextAddition: !!contextAddition
+  });
+
   return prompt;
 };
 
 // Génère une clé de cache
 const generateCacheKey = (options) => {
-  return `roadtrip_${Buffer.from(
-    JSON.stringify({
-      query: options.query,
-      location: options.location,
-      duration: options.duration,
-      budget: options.budget,
-      travelStyle: options.travelStyle,
-      interests: (options.interests || []).sort(),
-    })
-  ).toString("base64")}`;
+  const keyData = {
+    query: options.query,
+    location: options.location,
+    duration: options.duration,
+    budget: options.budget,
+    travelStyle: options.travelStyle,
+    interests: (options.interests || []).sort(),
+  };
+  
+  const key = `roadtrip_${Buffer.from(JSON.stringify(keyData)).toString("base64")}`;
+  
+  logger.debug('🔑 Clé de cache générée', {
+    keyLength: key.length,
+    keyPreview: key.substring(0, 30) + '...',
+    hasQuery: !!options.query,
+    hasLocation: !!options.location,
+    hasDuration: !!options.duration
+  });
+  
+  return key;
 };
 
 // Récupère la météo actuelle via OpenWeatherMap
 const getWeatherData = async (location) => {
+  const weatherStart = Date.now();
+  
   try {
     const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
-    if (!WEATHER_API_KEY) return null;
+    if (!WEATHER_API_KEY) {
+      logger.warn('⚠️ Clé API météo manquante', { location });
+      return null;
+    }
+
+    logger.debug('🌤️ Récupération météo en cours', { location });
 
     const { data } = await axios.get(
       "https://api.openweathermap.org/data/2.5/weather",
@@ -322,17 +492,59 @@ const getWeatherData = async (location) => {
           units: "metric",
           lang: "fr",
         },
+        timeout: 5000
       }
     );
 
-    return {
+    const weatherTime = Date.now() - weatherStart;
+    const weatherInfo = {
       condition: data.weather[0].description,
-      temperature: data.main.temp,
+      temperature: Math.round(data.main.temp),
     };
+
+    logger.info('✅ Météo récupérée avec succès', {
+      location,
+      condition: weatherInfo.condition,
+      temperature: weatherInfo.temperature,
+      weatherTime,
+      apiResponse: {
+        main: data.main,
+        weather: data.weather[0]
+      }
+    });
+
+    return weatherInfo;
   } catch (error) {
-    console.error("❌ Erreur lors de la récupération météo :", error.message);
+    const weatherTime = Date.now() - weatherStart;
+    
+    if (error.code === 'ECONNABORTED') {
+      logger.warn("⏰ Timeout récupération météo", {
+        location,
+        weatherTime,
+        timeout: 5000
+      });
+    } else if (error.response?.status === 404) {
+      logger.warn("🌍 Lieu météo introuvable", {
+        location,
+        weatherTime,
+        statusCode: error.response.status
+      });
+    } else {
+      logger.error("❌ Erreur récupération météo", {
+        location,
+        weatherTime,
+        error: {
+          message: error.message,
+          code: error.code,
+          status: error.response?.status
+        }
+      });
+    }
+    
     return null;
   }
 };
 
-module.exports = { roadtripAdvisorService };
+module.exports = { 
+  roadtripAdvisorService,
+};

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest"
+    "test": "jest --coverage --detectOpenHandles --forceExit",
+    "test:watch": "jest --watch"
   },
   "keywords": [],
   "author": "",
@@ -26,6 +27,8 @@
     "winston": "^3.17.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "jest": "^30.0.4",
+    "nodemon": "^3.1.10",
+    "supertest": "^7.1.3"
   }
 }

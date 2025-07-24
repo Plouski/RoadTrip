@@ -21,28 +21,41 @@ import { AlertMessage } from "@/components/ui/alert-message";
 export default function AuthPage(): JSX.Element {
   const router = useRouter();
 
-  // États des formulaires
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
-  const [firstName, setFirstName] = useState<string>("");
-  const [lastName, setLastName] = useState<string>("");
-  const [passwordConfirm, setPasswordConfirm] = useState<string>("");
+  // Hooks d’état
+  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [alertType, setAlertType] = useState<"success" | "error" | null>(null);
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
-  // Vérifie si l'utilisateur est déjà authentifié à l'ouverture de la page
+  // 🔁 useEffect TOUJOURS en haut
   useEffect(() => {
     const checkAuth = async () => {
       const isAuthenticated = await AuthService.checkAuthentication();
+
       if (isAuthenticated) {
-        router.push("/");
+        const user = await AuthService.getProfile();
+        const role = user?.role;
+
+        if (role === "admin") {
+          router.push("/admin");
+        } else {
+          router.push("/explorer");
+        }
+      } else {
+        setCheckingAuth(false);
       }
     };
+
     checkAuth();
   }, [router]);
 
+  // 🔁 Pas de return AVANT les hooks !
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const error = params.get("error");
@@ -64,6 +77,11 @@ export default function AuthPage(): JSX.Element {
     }
   }, []);
 
+  // ✅ Une fois les hooks définis, tu peux retourner une UI conditionnelle
+  if (checkingAuth) {
+    return <p className="text-center text-gray-500 py-10">Redirection...</p>;
+  }
+
   // Gestion du formulaire de connexion
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -74,8 +92,15 @@ export default function AuthPage(): JSX.Element {
       await AuthService.login(email, password);
       showAlert("Connexion réussie !", "success");
 
-      setTimeout(() => {
-        router.push("/");
+      setTimeout(async () => {
+        const user = await AuthService.getProfile();
+        const role = user?.role;
+
+        if (role === "admin") {
+          router.push("/admin");
+        } else {
+          router.push("/explorer");
+        }
       }, 500);
     } catch (error: any) {
       showAlert(error.message || "Une erreur s'est produite.", "error");

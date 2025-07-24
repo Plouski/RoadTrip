@@ -1,7 +1,8 @@
 import { cn } from "@/lib/utils"
+import { ReactNode } from "react"
 
 type ParagraphProps = {
-  children: React.ReactNode
+  children: ReactNode
   className?: string
   size?: "sm" | "base" | "lg"
   align?: "left" | "center" | "right"
@@ -26,7 +27,7 @@ export default function Paragraph({
   }
 
   return (
-    <p className={cn(sizeClasses[size], alignment[align], "text-gray-600", className)}>
+    <p className={cn(sizeClasses[size], alignment[align], "text-gray-600 dark:text-gray-300", className)}>
       {children}
     </p>
   )

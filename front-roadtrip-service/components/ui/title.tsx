@@ -1,10 +1,11 @@
 import { cn } from "@/lib/utils"
-import { JSX } from "react"
+import { JSX, ReactNode } from "react"
 
 type TitleProps = {
   level?: 1 | 2 | 3 | 4
-  children: React.ReactNode
+  children: ReactNode
   className?: string
+  id?: string
 }
 
 const baseStyles = {
@@ -14,10 +15,11 @@ const baseStyles = {
   4: "text-lg sm:text-xl font-medium"
 }
 
-export default function Title({ level = 2, children, className = "" }: TitleProps) {
+export default function Title({ level = 2, children, className = "", id }: TitleProps) {
   const Tag = `h${level}` as keyof JSX.IntrinsicElements
+
   return (
-    <Tag className={cn(baseStyles[level], "text-gray-900", className)}>
+    <Tag id={id} className={cn(baseStyles[level], "text-gray-900 dark:text-white", className)}>
       {children}
     </Tag>
   )

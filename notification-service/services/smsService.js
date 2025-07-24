@@ -1,12 +1,22 @@
 const axios = require('axios');
+const logger = require('../utils/logger');
 
 const SmsService = {
   
   // Envoie un SMS via l'API Free Mobile
   sendSMS: async (username, apiKey, message) => {
-    console.log(`📱 Envoi SMS via Free Mobile pour ${username}`);
+    logger.info("Tentative d'envoi de SMS via Free Mobile", {
+      type: 'sms',
+      provider: 'freemobile',
+      username
+    });
 
     if (!username || !apiKey) {
+      logger.error("Identifiants Free Mobile manquants", {
+        type: 'sms',
+        provider: 'freemobile',
+        username
+      });
       throw new Error('Identifiants Free Mobile manquants');
     }
 
@@ -21,19 +31,38 @@ const SmsService = {
       const response = await axios.get(url, { params });
 
       if (response.status !== 200) {
+        logger.warn("Réponse inattendue de l'API Free Mobile", {
+          type: 'sms',
+          provider: 'freemobile',
+          username,
+          status: response.status
+        });
         throw new Error(`API Free Mobile retourne: ${response.status}`);
       }
 
-      console.log('✅ SMS envoyé avec succès via Free Mobile');
+      logger.info("SMS envoyé avec succès via Free Mobile", {
+        type: 'sms',
+        provider: 'freemobile',
+        username,
+        status: response.status
+      });
+
       return { success: true, status: response.status };
 
     } catch (error) {
-      console.error('❌ Erreur envoi SMS Free Mobile:', error.message);
-      
+      const logData = {
+        type: 'sms',
+        provider: 'freemobile',
+        username,
+        error: error.message
+      };
+
       if (error.response) {
-        console.error(`Status: ${error.response.status}`);
-        console.error(`Data: ${error.response.data}`);
-        
+        logData.status = error.response.status;
+        logData.responseData = error.response.data;
+
+        logger.error("Erreur réponse API Free Mobile", logData);
+
         switch (error.response.status) {
           case 400:
             throw new Error('Paramètres manquants ou incorrects');
@@ -47,14 +76,15 @@ const SmsService = {
             throw new Error(`Erreur Free Mobile: ${error.response.status}`);
         }
       }
-      
+
+      logger.error("Erreur réseau lors de l'envoi SMS", logData);
       throw new Error(`Erreur réseau: ${error.message}`);
     }
   },
 
   // Envoie un SMS de réinitialisation de mot de passe
   sendPasswordResetCode: async (username, apiKey, code) => {
-    const message = `ROADTRIP - Code de réinitialisation: ${code}`;
+    const message = `RoadTrip! - Votre code de réinitialisation est : ${code}`;
     return await SmsService.sendSMS(username, apiKey, message);
   }
 };

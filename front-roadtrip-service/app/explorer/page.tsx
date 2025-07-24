@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { RoadtripService } from "@/services/roadtrip-service";
+import { FavoriteService } from "@/services/favorites-service";
 import RoadTripCard from "@/components/road-trip-card";
 import { Filter, Map, RefreshCcw } from "lucide-react";
 import SearchFilters from "@/components/search-bar";
@@ -26,49 +27,49 @@ export default function ExplorerPage() {
     setLoading(true);
     try {
       const response = await RoadtripService.getPublicRoadtrips();
-      
       const allTrips = response?.trips || [];
-      
-      if (!Array.isArray(allTrips)) {
-        console.error("Les données reçues ne sont pas un array:", allTrips);
-        setRoadtrips([]);
-        return;
+
+      let favoriteTrips: any[] = [];
+      try {
+        const favData = await FavoriteService.getFavorites();
+        favoriteTrips = favData?.roadtrips || [];
+      } catch (err) {
+        favoriteTrips = [];
       }
 
-      let filtered = allTrips;
+      const favoriteIds = new Set(favoriteTrips.map((trip) => trip._id));
+      const enrichedTrips = allTrips.map((trip: any) => ({
+        ...trip,
+        isFavorite: favoriteIds.has(trip._id),
+      }));
+
+      let filtered = enrichedTrips;
       let activeFiltersCount = 0;
 
-      // Filtrage par recherche de texte
       if (searchQuery.trim()) {
-        filtered = filtered.filter((trip: { title: string }) =>
+        filtered = filtered.filter((trip) =>
           trip.title?.toLowerCase().includes(searchQuery.toLowerCase())
         );
         activeFiltersCount++;
       }
 
-      // Filtrage par pays
       if (selectedCountry !== "all") {
-        filtered = filtered.filter(
-          (trip: { country: string }) => trip.country === selectedCountry
-        );
+        filtered = filtered.filter((trip) => trip.country === selectedCountry);
         activeFiltersCount++;
       }
 
-      // Filtrage par durée
       if (durationRange !== "all") {
-        filtered = filtered.filter((trip: { duration: number }) => {
+        filtered = filtered.filter((trip) => {
           if (durationRange === "short") return trip.duration <= 3;
-          if (durationRange === "medium")
-            return trip.duration > 3 && trip.duration <= 7;
+          if (durationRange === "medium") return trip.duration > 3 && trip.duration <= 7;
           if (durationRange === "long") return trip.duration > 7;
           return true;
         });
         activeFiltersCount++;
       }
 
-      // Filtrage par budget
       if (budgetRange !== "all") {
-        filtered = filtered.filter((trip: { budget: { amount: number } }) => {
+        filtered = filtered.filter((trip) => {
           const amount = trip.budget?.amount || 0;
           if (budgetRange === "low") return amount <= 500;
           if (budgetRange === "medium") return amount > 500 && amount <= 1000;
@@ -78,37 +79,27 @@ export default function ExplorerPage() {
         activeFiltersCount++;
       }
 
-      // Filtrage par saison
       if (season !== "all") {
-        filtered = filtered.filter(
-          (trip: { bestSeason: string }) =>
-            trip.bestSeason?.toLowerCase() === season
-        );
+        filtered = filtered.filter((trip) => trip.bestSeason?.toLowerCase() === season);
         activeFiltersCount++;
       }
 
-      // Filtrage par tag
       if (selectedTag !== "all") {
-        filtered = filtered.filter((trip: { tags: string | string[] }) =>
+        filtered = filtered.filter((trip) =>
           Array.isArray(trip.tags) ? trip.tags.includes(selectedTag) : false
         );
         activeFiltersCount++;
       }
 
-      // Filtrage par statut premium
       if (isPremium !== "all") {
-        filtered = filtered.filter(
-          (trip: { isPremium: boolean }) =>
-            trip.isPremium === (isPremium === "true")
+        filtered = filtered.filter((trip) =>
+          trip.isPremium === (isPremium === "true")
         );
         activeFiltersCount++;
       }
 
       setActiveFilters(activeFiltersCount);
       setRoadtrips(filtered);
-      
-      console.log(`✅ ${filtered.length} roadtrips chargés avec ${activeFiltersCount} filtres actifs`);
-      
     } catch (error) {
       console.error("Erreur lors du chargement des roadtrips :", error);
       setRoadtrips([]);
@@ -132,51 +123,31 @@ export default function ExplorerPage() {
     fetchRoadtrips();
   }, []);
 
-  const safeRoadtrips = Array.isArray(roadtrips) ? roadtrips : [];
-
-  const allCountries = Array.from(
-    new Set(safeRoadtrips.map((trip) => trip.country).filter(Boolean))
-  );
+  const allCountries = Array.from(new Set(roadtrips.map((trip) => trip.country).filter(Boolean)));
   const allTags = Array.from(
-    new Set(
-      safeRoadtrips
-        .flatMap((trip) => Array.isArray(trip.tags) ? trip.tags : [])
-        .filter(Boolean)
-    )
+    new Set(roadtrips.flatMap((trip) => Array.isArray(trip.tags) ? trip.tags : []).filter(Boolean))
   );
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container py-8 sm:py-12 lg:py-16 px-4 sm:px-6 lg:px-8">
-        {/* Section d'en-tête */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 sm:gap-6 mb-8 sm:mb-12">
           <div className="flex-1">
-            <Title level={2} className="mb-3 sm:mb-4">
-              Explorer les Roadtrips
-            </Title>
+            <Title level={2} className="mb-3 sm:mb-4">Explorer les Roadtrips</Title>
             <Paragraph size="base" className="max-w-2xl">
-              Découvrez nos itinéraires soigneusement sélectionnés à travers le
-              monde
+              Découvrez nos itinéraires soigneusement sélectionnés à travers le monde
             </Paragraph>
           </div>
-          
-          {/* Bouton de réinitialisation des filtres */}
+
           {activeFilters > 0 && (
             <div className="flex-shrink-0">
-              <Button 
-                onClick={resetFilters} 
-                variant="outline"
-                className="w-full lg:w-auto flex items-center justify-center gap-2 px-4 py-2"
-              >
-                <RefreshCcw className="h-4 w-4" />
-                <span className="hidden sm:inline">Réinitialiser les filtres</span>
-                <span className="sm:hidden">Réinitialiser</span>
+              <Button onClick={resetFilters} variant="outline" className="w-full lg:w-auto flex items-center gap-2">
+                <RefreshCcw className="h-4 w-4" /> Réinitialiser les filtres
               </Button>
             </div>
           )}
         </div>
 
-        {/* Filtres de recherche */}
         <div className="mb-8 sm:mb-12">
           <SearchFilters
             searchQuery={searchQuery}
@@ -199,107 +170,47 @@ export default function ExplorerPage() {
           />
         </div>
 
-        {/* Résumé des résultats */}
-        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
-          <div className="text-gray-600">
-            {loading ? (
-              <div className="flex items-center gap-2">
-                <Loading text="Chargement des itinéraires..." />
-              </div>
-            ) : (
-              <Paragraph size="sm">
-                {safeRoadtrips.length}{" "}
-                {safeRoadtrips.length > 1 ? "itinéraires trouvés" : "itinéraire trouvé"}
-              </Paragraph>
-            )}
-          </div>
-          
-          {safeRoadtrips.length > 0 && !loading && (
-            <div className="flex items-center text-sm text-gray-500">
-              <Map className="h-4 w-4 mr-2 flex-shrink-0" />
-              <span>
-                {Array.from(new Set(safeRoadtrips.map((trip) => trip.country).filter(Boolean))).length}{" "}
-                pays disponibles
-              </span>
-            </div>
+        <div className="mb-6 sm:mb-8">
+          {!loading && (
+            <Paragraph size="sm">
+              {roadtrips.length} {roadtrips.length > 1 ? "itinéraires trouvés" : "itinéraire trouvé"}
+            </Paragraph>
           )}
         </div>
 
-        {/* Contenu principal */}
         {loading ? (
           <div className="flex justify-center py-16 sm:py-20">
             <Loading text="Chargement de vos aventures..." />
           </div>
-        ) : safeRoadtrips.length === 0 ? (
-          <div className="rounded-xl sm:rounded-2xl p-8 sm:p-12 lg:p-16 text-center border border-gray-200 bg-white shadow-sm">
-            <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gray-100 mb-6 sm:mb-8 shadow-inner">
-              <Filter className="h-6 w-6 sm:h-8 sm:w-8 text-gray-400" />
+        ) : roadtrips.length === 0 ? (
+          <div className="rounded-xl p-8 text-center border border-gray-200 bg-white shadow-sm">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-6">
+              <Filter className="h-6 w-6 text-gray-400" />
             </div>
-            
-            <Title level={3} className="mb-4">
-              Aucun roadtrip ne correspond à vos critères
-            </Title>
-            
-            <Paragraph 
-              size="sm" 
-              align="center"
-              className="max-w-md mx-auto mb-6 sm:mb-8 px-4 sm:px-0"
-            >
-              Essayez d'ajuster vos filtres pour découvrir nos itinéraires
-              incroyables ou explorez-les tous.
+            <Title level={3} className="mb-4">Aucun roadtrip ne correspond à vos critères</Title>
+            <Paragraph size="sm" className="max-w-md mx-auto mb-6">
+              Essayez d'ajuster vos filtres pour découvrir nos itinéraires incroyables ou explorez-les tous.
             </Paragraph>
-            
-            <Button 
-              variant="outline" 
-              onClick={resetFilters}
-              className="px-6 py-2.5 sm:py-3"
-            >
-              Afficher tous les roadtrips
-            </Button>
+            <Button variant="outline" onClick={resetFilters}>Afficher tous les roadtrips</Button>
           </div>
         ) : (
-          <>
-            {/* Grille des roadtrips */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8 mb-12 sm:mb-16">
-              {safeRoadtrips.map((trip, index) => (
-                <div key={trip._id || index} className="h-full">
-                  <RoadTripCard
-                    id={trip._id}
-                    title={trip.title}
-                    image={trip.image}
-                    country={trip.country}
-                    region={trip.region}
-                    duration={trip.duration}
-                    budget={trip.budget?.amount || 0}
-                    tags={trip.tags}
-                    isPremium={trip.isPremium}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* CTA en bas pour les grandes listes de résultats */}
-            {safeRoadtrips.length > 9 && (
-              <div className="flex justify-center">
-                <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 max-w-lg text-center">
-                  <Paragraph size="base" className="mb-4 sm:mb-6">
-                    Vous avez découvert {safeRoadtrips.length} destinations
-                    incroyables. Trouvez celle qui vous fera rêver !
-                  </Paragraph>
-                  
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      window.scrollTo({ top: 0, behavior: "smooth" })
-                    }
-                    className="border-primary text-primary hover:bg-primary/5 px-6 py-2.5"
-                  >
-                    Revenir aux filtres
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-12">
+            {roadtrips.map((trip, index) => (
+              <RoadTripCard
+                key={trip._id || index}
+                id={trip._id}
+                title={trip.title}
+                image={trip.image}
+                country={trip.country}
+                region={trip.region}
+                duration={trip.duration}
+                budget={trip.budget?.amount || 0}
+                tags={trip.tags}
+                isPremium={trip.isPremium}
+                isFavorite={trip.isFavorite}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>
