@@ -48,13 +48,42 @@ const SERVICE_NAME = detectServiceName();
 
 // 📁 Structure des logs adaptée à ROADTRIP
 const createLogsPaths = (serviceName) => {
-  const baseLogsDir = path.join(process.cwd(), '..', 'logs'); // logs/ à la racine du projet
+  // CORRECTION: Vérifier si on est dans un container Docker
+  const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER;
+  
+  let baseLogsDir;
+  
+  if (isDocker) {
+    // Dans Docker: utiliser le volume monté ou créer dans /app/logs
+    baseLogsDir = process.env.LOGS_DIR || '/app/logs';
+  } else {
+    // En développement local: utiliser ../logs comme prévu
+    baseLogsDir = path.join(process.cwd(), '..', 'logs');
+  }
+  
   const serviceLogsDir = path.join(baseLogsDir, serviceName);
   
-  // Créer les dossiers si nécessaire
+  // Créer les dossiers si nécessaire (avec gestion d'erreur)
   [baseLogsDir, serviceLogsDir].forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    try {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    } catch (error) {
+      // Si erreur de permission, fallback vers un dossier temporaire
+      console.warn(`⚠️  Impossible de créer ${dir}, utilisation de /tmp/logs`);
+      const tempLogsDir = path.join('/tmp', 'logs', serviceName);
+      if (!fs.existsSync(tempLogsDir)) {
+        fs.mkdirSync(tempLogsDir, { recursive: true });
+      }
+      return {
+        baseDir: '/tmp/logs',
+        serviceDir: tempLogsDir,
+        errorLog: path.join(tempLogsDir, 'error.log'),
+        combinedLog: path.join(tempLogsDir, 'combined.log'),
+        accessLog: path.join(tempLogsDir, 'access.log'),
+        performanceLog: path.join(tempLogsDir, 'performance.log')
+      };
     }
   });
 

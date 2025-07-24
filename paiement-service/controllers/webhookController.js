@@ -1,5 +1,5 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-const { logger } = require("../utils/logger");
+const logger = require("../utils/logger");
 const SubscriptionIntegrationService = require("../services/subscriptionIntegrationService");
 
 // Fonction pour calculer correctement les dates d'abonnement

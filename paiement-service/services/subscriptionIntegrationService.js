@@ -1,6 +1,6 @@
 const Subscription = require("../models/Subscription");
 const User = require("../models/User");
-const { logger } = require("../utils/logger");
+const logger = require("../utils/logger");
 const mongoose = require("mongoose");
 const Stripe = require("stripe");
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);

@@ -1,7 +1,7 @@
 const SubscriptionIntegrationService = require("../services/subscriptionIntegrationService.js");
 const Stripe = require("stripe");
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const { logger } = require("../utils/logger");
+const logger  = require("../utils/logger");
 
 class subscriptionController {
   // Récupérer l'abonnement actif de l'utilisateur connecté

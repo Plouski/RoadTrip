@@ -6,7 +6,8 @@ const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 
-const { logger, middleware } = require("./utils/logger");
+// ✅ CORRECTION: Import correct du logger
+const logger = require("./utils/logger");
 
 const {
   register,
@@ -23,7 +24,8 @@ const PORT = process.env.PORT || 5004;
 const METRICS_PORT = process.env.METRICS_PORT || 9004;
 const SERVICE_NAME = "paiement-service";
 
-app.use(middleware());
+// ✅ CORRECTION: Utilisation du middleware depuis l'objet logger
+app.use(logger.middleware());
 
 logger.info(`🚀 Démarrage du ${SERVICE_NAME}...`);
 
@@ -168,7 +170,7 @@ logger.info(`🚀 Démarrage du ${SERVICE_NAME}...`);
             stripe: !!process.env.STRIPE_SECRET_KEY,
           },
           currencies_supported: ["EUR", "USD"],
-          webhook_endpoints: ["/webhook"], // ✅ ajoute ceci
+          webhook_endpoints: ["/webhook"],
         },
       });
     });
