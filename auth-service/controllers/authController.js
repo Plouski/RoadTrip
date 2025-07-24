@@ -40,23 +40,6 @@ class AuthController {
         requestId: req.id
       });
 
-      // Enregistrer l'événement dans le data service
-      try {
-        const dataService = require('../services/dataService');
-        await dataService.logOAuthAttempt(user.oauth?.provider, true, {
-          id: _id,
-          email,
-          userAgent: req.get('User-Agent'),
-          ip: req.ip
-        });
-      } catch (logError) {
-        logger.warn('⚠️ Impossible d\'enregistrer l\'événement OAuth', {
-          userId: _id,
-          provider: user.oauth?.provider,
-          error: logError.message
-        });
-      }
-
       const isApiClient = req.get("Accept") === "application/json";
 
       if (isApiClient) {

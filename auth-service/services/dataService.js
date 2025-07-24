@@ -403,45 +403,6 @@ class DataService {
     }
   }
 
-  // Enregistrer un événement d'authentification
-  async logAuthEvent(eventData) {
-    const startTime = Date.now();
-    
-    try {
-      logger.auth('📝 Enregistrement événement auth', {
-        userId: eventData.userId,
-        action: eventData.action,
-        provider: eventData.provider,
-        success: eventData.success
-      });
-
-      await this.client.post("/auth-events", {
-        ...eventData,
-        timestamp: new Date(),
-        service: "auth-service",
-      });
-      
-      logger.auth('✅ Événement auth enregistré', {
-        userId: eventData.userId,
-        action: eventData.action,
-        processingTime: Date.now() - startTime
-      });
-      
-    } catch (error) {
-      logger.warn('⚠️ Impossible d\'enregistrer l\'événement auth', {
-        userId: eventData.userId,
-        action: eventData.action,
-        error: {
-          message: error.message,
-          status: error.response?.status
-        },
-        processingTime: Date.now() - startTime
-      });
-      
-      // Ne pas faire échouer l'authentification si l'événement ne peut pas être loggé
-    }
-  }
-
   // Enregistrer une tentative de connexion OAuth
   async logOAuthAttempt(provider, success, userData = null) {
     const eventData = {
