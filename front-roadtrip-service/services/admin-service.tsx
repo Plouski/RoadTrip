@@ -46,7 +46,7 @@ export const AdminService = {
     // 🔥 TRANSFORMATION : Adapter la structure backend vers frontend
     if (response.success && response.stats) {
       const backendStats = response.stats;
-      
+
       return {
         totalUsers: backendStats.users?.total || 0,
         activeUsers: backendStats.users?.verified || 0, // Utilisateurs vérifiés = actifs
@@ -82,7 +82,7 @@ export const AdminService = {
 
     if (!res.ok)
       throw new Error("Impossible de récupérer les derniers utilisateurs");
-    
+
     const response = await res.json();
     console.log("🔍 Réponse brute recent users:", response);
 
@@ -103,7 +103,7 @@ export const AdminService = {
 
     if (!res.ok)
       throw new Error("Impossible de récupérer les derniers roadtrips");
-    
+
     const response = await res.json();
     console.log("🔍 Réponse brute recent roadtrips:", response);
 
@@ -198,6 +198,27 @@ export const AdminService = {
     }
 
     return await response.json();
+  },
+
+  async getUserSubscription(userId: string) {
+    const headers = await AuthService.getAuthHeaders();
+    const res = await fetch(
+      `${API_GATEWAY_URL}/api/admin/users/${userId}/subscription`,
+      {
+        method: "GET",
+        headers,
+      }
+    );
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(
+        errorData.message || "Impossible de récupérer l'abonnement"
+      );
+    }
+
+    const data = await res.json();
+    return data.subscription; // peut être null
   },
 
   /**

@@ -7,3 +7,9 @@ metrics-service : ok
 notification-service : ok
 paiement-service : ok
 front-service :
+
+améliorer export pdf
+
+créer une page de contact
+
+améliorer le budget dans explorer et favoris

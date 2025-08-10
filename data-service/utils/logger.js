@@ -483,4 +483,35 @@ if (enableFileLogging && !isTest) {
   }, 5000);
 }
 
+// Helper léger pour sérialiser proprement une erreur
+const _toErr = (e) =>
+  e instanceof Error
+    ? { name: e.name, message: e.message, stack: e.stack }
+    : e;
+
+// logger.logError("Contexte", error, { meta })
+logger.logError = (context, error, meta = {}) => {
+  logger.error(context, {
+    service: SERVICE_NAME,
+    error: _toErr(error),
+    ...meta,
+  });
+};
+
+// logger.logAuth("Message", user, { meta })
+logger.logAuth = (message, user, meta = {}) => {
+  logger.info(message, {
+    type: "auth",
+    service: SERVICE_NAME,
+    user: user
+      ? {
+          id: user._id || user.id,
+          email: user.email,
+          role: user.role,
+        }
+      : undefined,
+    ...meta,
+  });
+};
+
 module.exports = logger;
