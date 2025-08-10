@@ -4,10 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+"start": "node index.js",
+    "dev": "nodemon index.js", 
     "test": "jest --coverage --detectOpenHandles --forceExit",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "project:status": "echo 'AI-Service - Sprint 3/4 - 85% complete'",
+    "demo": "echo 'Demo: curl -H \"Authorization: Bearer valid-token\" http://localhost:5003/api/ai/ask -d {\"prompt\":\"roadtrip France 7 jours\"}'"
   },
   "keywords": [],
   "author": "",

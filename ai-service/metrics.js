@@ -3,14 +3,12 @@ const promClient = require('prom-client');
 // Registre
 const register = new promClient.Registry();
 
-// 🔧 CORRECTION: Normaliser le nom du service pour Prometheus
 const normalizeServiceName = (serviceName) => {
   if (!serviceName) return 'service';
-  // Remplacer les tirets par des underscores et s'assurer que c'est valide
   return serviceName.toLowerCase()
-    .replace(/-/g, '_')           // tirets -> underscores
-    .replace(/[^a-z0-9_]/g, '_')  // caractères invalides -> underscores
-    .replace(/^([0-9])/, '_$1');  // si commence par un chiffre, ajouter underscore
+    .replace(/-/g, '_')
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/^([0-9])/, '_$1');
 };
 
 const SERVICE_NAME = normalizeServiceName(process.env.SERVICE_NAME || 'service');
@@ -18,7 +16,6 @@ const PROMETHEUS_PREFIX = `${SERVICE_NAME}_`;
 
 console.log(`📊 Prometheus configuré pour: ${SERVICE_NAME} (préfixe: ${PROMETHEUS_PREFIX})`);
 
-// Métriques par défaut (CPU, mémoire, etc.) - VITALS obligatoires
 try {
   promClient.collectDefaultMetrics({
     register,
@@ -27,7 +24,6 @@ try {
   console.log(`✅ Métriques par défaut configurées avec le préfixe: ${PROMETHEUS_PREFIX}`);
 } catch (error) {
   console.error(`❌ Erreur configuration métriques par défaut: ${error.message}`);
-  // Fallback sans préfixe si ça échoue
   try {
     promClient.collectDefaultMetrics({ register });
     console.log(`⚠️ Métriques par défaut configurées SANS préfixe`);

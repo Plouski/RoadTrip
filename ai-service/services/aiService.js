@@ -1,4 +1,3 @@
-// services/aiService.js - Version OpenAI v4 compatible
 const NodeCache = require("node-cache");
 const axios = require("axios");
 const logger = require("../utils/logger");
@@ -7,21 +6,17 @@ const { isRoadtripRelated } = require("../utils/roadtripValidation");
 const { extractDurationFromQuery } = require("../utils/durationExtractor");
 const { generateCacheKey } = require("../utils/cacheKey");
 
-// 🔧 Import OpenAI selon la version
 let OpenAI;
 let openai;
 
 try {
-  // Essayer import ES6 (v4+)
   const openaiModule = require("openai");
   OpenAI = openaiModule.default || openaiModule.OpenAI || openaiModule;
   
-  // Vérifier que c'est bien une classe
   if (typeof OpenAI !== 'function') {
     throw new Error('OpenAI import failed');
   }
   
-  // Initialiser avec vérification
   if (!process.env.OPENAI_API_KEY && process.env.NODE_ENV !== 'test') {
     throw new Error('OPENAI_API_KEY manquante');
   }
@@ -35,7 +30,6 @@ try {
 } catch (error) {
   logger.error(`❌ Erreur initialisation OpenAI: ${error.message}`);
   
-  // Fallback mock pour développement/tests
   openai = {
     chat: {
       completions: {
@@ -208,9 +202,7 @@ async function getWeatherInfo(city, days = 7) {
   }
 }
 
-/* ==============================
-   OpenAI + Prompt
-============================== */
+/*  OpenAI + Prompt */
 const SYSTEM_PROMPT = `
 Tu es un expert en organisation de voyages et en création d'itinéraires immersifs.
 La destination doit être extraite ou déduite de la requête utilisateur.
@@ -273,9 +265,7 @@ async function callOpenAIWithRetry(messages, retries = 2) {
   throw lastError;
 }
 
-/* ==============================
-   Service principal
-============================== */
+/* Service principal */
 async function generateRoadtripAdvisor(options) {
   const t0 = Date.now();
 
@@ -311,10 +301,9 @@ async function generateRoadtripAdvisor(options) {
     const json = parseStrictJSON(raw);
     const itinerary = ensureShape(json);
 
-    // 🔥 Ajouter la météo pour chaque jour
     if (Array.isArray(itinerary.itineraire) && itinerary.itineraire.length) {
       logger.info('🌤️ Ajout informations météo...');
-      for (let i = 0; i < Math.min(itinerary.itineraire.length, 5); i++) { // Limiter à 5 pour éviter rate limit
+      for (let i = 0; i < Math.min(itinerary.itineraire.length, 5); i++) {
         const jour = itinerary.itineraire[i];
         const lieu =
           jour?.lieu && jour.lieu !== "Lieu non défini"
