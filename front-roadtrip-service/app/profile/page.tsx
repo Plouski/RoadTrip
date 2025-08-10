@@ -8,40 +8,14 @@ import Loading from "@/components/ui/loading";
 import ProfileSidebar from "@/components/profile/profileSidebar";
 import ProfileTabs from "@/components/profile/profileTabs";
 
-interface User {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  email: string;
-  phoneNumber?: string;
-  role: string;
-  authProvider?: string;
-  createdAt: string;
-}
-
-interface Subscription {
-  _id: string;
-  plan: "free" | "monthly" | "annual" | "premium";
-  status: "active" | "canceled" | "suspended" | "trialing" | "incomplete";
-  isActive: boolean;
-  startDate: string;
-  endDate?: string;
-  paymentMethod?: string;
-  cancelationType?: "immediate" | "end_of_period";
-  daysRemaining?: number;
-}
-
 export default function ProfilePage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [subscriptionLoading, setSubscriptionLoading] =
-    useState<boolean>(false);
-
-  // Messages d'alerte
-  const [alertMessage, setAlertMessage] = useState<string>("");
-  const [alertType, setAlertType] = useState<"success" | "error" | null>(null);
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [subscription, setSubscription] = useState(null);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState(null);
 
   useEffect(() => {
     fetchUserData();
@@ -56,18 +30,18 @@ export default function ProfilePage() {
         return;
       }
 
-      // Charger les données utilisateur et abonnement en parallèle
       const [userData, currentSub] = await Promise.all([
         AuthService.getProfile(),
         SubscriptionService.getCurrentSubscription(),
       ]);
 
-      console.log("🔍 Data loaded from backend:", {
+      console.log("Data loaded from backend:", {
         userData,
         currentSub,
         subStatus: currentSub?.status,
         subIsActive: currentSub?.isActive,
         subCancelationType: currentSub?.cancelationType,
+        authProvider: userData?.authProvider,
       });
 
       setUser(userData);
@@ -87,7 +61,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleAlert = (message: string, type: "success" | "error") => {
+  const handleAlert = (message, type) => {
     setAlertMessage(message);
     setAlertType(type);
 
@@ -97,8 +71,7 @@ export default function ProfilePage() {
     }, 5000);
   };
 
-  // Gestionnaire de suppression de compte
-  const handleDeleteAccount = async (): Promise<void> => {
+  const handleDeleteAccount = async () => {
     try {
       await AuthService.deleteAccount();
       handleAlert("Votre compte a été supprimé", "success");
@@ -118,9 +91,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleCancelSubscription = async (
-    immediate: boolean = false
-  ): Promise<void> => {
+  const handleCancelSubscription = async (immediate = false) => {
     try {
       setSubscriptionLoading(true);
 
@@ -130,11 +101,11 @@ export default function ProfilePage() {
       const confirmed = window.confirm(confirmMessage);
       if (!confirmed) return;
 
-      console.log("🔄 Tentative d'annulation...");
+      console.log("Tentative d'annulation...");
 
       const result = await SubscriptionService.cancelSubscription();
 
-      console.log("✅ Annulation réussie:", result);
+      console.log("Annulation réussie:", result);
 
       await fetchUserData();
 
@@ -148,7 +119,7 @@ export default function ProfilePage() {
 
       handleAlert(message, "success");
     } catch (error) {
-      console.error("❌ Erreur lors de l'annulation de l'abonnement:", error);
+      console.error("Erreur lors de l'annulation de l'abonnement:", error);
 
       let errorMessage = "Une erreur est survenue lors de l'annulation.";
       if (error instanceof Error) {
@@ -166,8 +137,8 @@ export default function ProfilePage() {
     }
   };
 
-  const handleReactivateSubscription = async (): Promise<void> => {
-    console.log("🔄 handleReactivateSubscription appelé");
+  const handleReactivateSubscription = async () => {
+    console.log("handleReactivateSubscription appelé");
 
     if (!subscription) {
       handleAlert("Aucun abonnement trouvé à réactiver.", "error");
@@ -200,7 +171,6 @@ export default function ProfilePage() {
         "success"
       );
     } catch (error) {
-
       let errorMessage = "Une erreur est survenue lors de la réactivation.";
       if (error instanceof Error) {
         errorMessage = error.message;
@@ -212,9 +182,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleChangePlan = async (
-    newPlan: "monthly" | "annual"
-  ): Promise<void> => {
+  const handleChangePlan = async (newPlan) => {
     try {
       setSubscriptionLoading(true);
 
@@ -261,7 +229,7 @@ export default function ProfilePage() {
 
       await fetchUserData();
 
-      const message = `Plan changé avec succès vers ${planName}.`
+      const message = `Plan changé avec succès vers ${planName}.`;
 
       handleAlert(message, "success");
     } catch (error) {
@@ -279,20 +247,23 @@ export default function ProfilePage() {
   };
 
   // Gestionnaire de mise à jour du profil
-  const handleUpdateUser = (updatedUser: User): void => {
+  const handleUpdateUser = (updatedUser) => {
     setUser(updatedUser);
     handleAlert("Profil mis à jour avec succès", "success");
   };
 
   // Gestionnaire pour aller vers la page premium
-  const handleGoToPremium = (): void => {
+  const handleGoToPremium = () => {
     router.push("/premium");
   };
 
   // Gestionnaire pour voir l'historique des paiements
-  const handleViewPaymentHistory = (): void => {
+  const handleViewPaymentHistory = () => {
     router.push("/profile/payments");
   };
+
+  // Vérifier si l'utilisateur s'est connecté via OAuth
+  const isOAuthUser = user?.authProvider && user.authProvider !== "local";
 
   if (isLoading) {
     return <Loading text="Chargement de votre profil..." />;
@@ -321,6 +292,7 @@ export default function ProfilePage() {
           user={user}
           subscription={subscription}
           subscriptionLoading={subscriptionLoading}
+          isOAuthUser={isOAuthUser}
           onAlert={handleAlert}
           onUpdateUser={handleUpdateUser}
           onCancelSubscription={handleCancelSubscription}

@@ -8,7 +8,7 @@ notification-service : ok
 paiement-service : ok
 front-service :
 
-améliorer export pdf
+améliorer export pdf : OK
 
 créer une page de contact
 
