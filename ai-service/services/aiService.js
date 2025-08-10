@@ -1,338 +1,374 @@
-const { OpenAI } = require("openai");
-const dotenv = require("dotenv");
+// services/aiService.js - Version OpenAI v4 compatible
 const NodeCache = require("node-cache");
 const axios = require("axios");
+const logger = require("../utils/logger");
+const metrics = require("../metrics");
+const { isRoadtripRelated } = require("../utils/roadtripValidation");
+const { extractDurationFromQuery } = require("../utils/durationExtractor");
+const { generateCacheKey } = require("../utils/cacheKey");
 
-dotenv.config();
+// 🔧 Import OpenAI selon la version
+let OpenAI;
+let openai;
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+try {
+  // Essayer import ES6 (v4+)
+  const openaiModule = require("openai");
+  OpenAI = openaiModule.default || openaiModule.OpenAI || openaiModule;
+  
+  // Vérifier que c'est bien une classe
+  if (typeof OpenAI !== 'function') {
+    throw new Error('OpenAI import failed');
+  }
+  
+  // Initialiser avec vérification
+  if (!process.env.OPENAI_API_KEY && process.env.NODE_ENV !== 'test') {
+    throw new Error('OPENAI_API_KEY manquante');
+  }
+  
+  openai = new OpenAI({ 
+    apiKey: process.env.OPENAI_API_KEY || 'test-key-for-testing'
+  });
+  
+  logger.info('✅ OpenAI initialisé avec succès');
+  
+} catch (error) {
+  logger.error(`❌ Erreur initialisation OpenAI: ${error.message}`);
+  
+  // Fallback mock pour développement/tests
+  openai = {
+    chat: {
+      completions: {
+        create: async () => ({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                type: 'roadtrip_itinerary',
+                destination: 'France (Mode Fallback)',
+                duree_recommandee: '7 jours',
+                budget_estime: {
+                  total: '1200€',
+                  transport: '300€',
+                  hebergement: '500€',
+                  nourriture: '250€',
+                  activites: '150€'
+                },
+                saison_ideale: 'Printemps-Été',
+                points_interet: ['Paris', 'Loire', 'Provence'],
+                itineraire: [{
+                  jour: 1,
+                  lieu: 'Paris',
+                  description: 'Découverte de la capitale',
+                  activites: ['Tour Eiffel', 'Louvre'],
+                  distance: '0 km',
+                  temps_conduite: '0h',
+                  hebergement: 'Hôtel centre-ville'
+                }],
+                conseils: ['Mode fallback activé', 'Configurez OPENAI_API_KEY']
+              })
+            }
+          }]
+        })
+      }
+    }
+  };
+  
+  logger.warn('⚠️ Mode fallback OpenAI activé');
+}
+
 const cache = new NodeCache({ stdTTL: 3600 });
 
-// Validation du contenu roadtrip
-const isRoadtripRelated = (query) => {
+/*  Utils: parsing + validation */
+function parseStrictJSON(text) {
+  if (typeof text !== "string") return text;
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error("Réponse IA non JSON");
+  }
+  return JSON.parse(text.slice(start, end + 1));
+}
+
+function parseAmountToNumber(v) {
+  if (v == null) return 0;
+  const s = String(v).toLowerCase().replace(/\s/g, "");
+  if (s.includes("k")) {
+    const base = parseFloat(s.replace(/[^0-9.,-]/g, "").replace(",", "."));
+    return isNaN(base) ? 0 : base * 1000;
+  }
+  const num = parseFloat(s.replace(/[^0-9.,-]/g, "").replace(",", "."));
+  return isNaN(num) ? 0 : num;
+}
+
+function formatEuro(n) {
   try {
-    if (!query || typeof query !== 'string') {
-      return false;
-    }
-
-    const queryLower = query.toLowerCase().trim();
-    
-    const travelKeywords = [
-      // Voyage général
-      'voyage', 'voyager', 'partir', 'aller', 'visiter', 'trip', 'travel',
-      'roadtrip', 'road trip', 'itinéraire', 'itinerary', 'route',
-      
-      // Destinations
-      'pays', 'ville', 'région', 'destination', 'country', 'city',
-      
-      // Durée
-      'jour', 'jours', 'semaine', 'semaines', 'mois', 'day', 'days', 'week', 'weeks', 'month',
-      
-      // Transport
-      'voiture', 'conduire', 'rouler', 'car', 'drive', 'driving',
-      
-      // Hébergement
-      'hébergement', 'hôtel', 'hotel', 'logement', 'dormir', 'rester',
-      
-      // Activités
-      'voir', 'faire', 'activité', 'activités', 'visiter', 'découvrir',
-      'restaurant', 'manger', 'culture', 'musée', 'monument',
-      
-      // Budget
-      'budget', 'prix', 'coût', 'coûter', 'euro', 'euros', '€', 'money',
-      
-      // Noms de pays/régions populaires
-      'france', 'espagne', 'italie', 'allemagne', 'portugal', 'maroc',
-      'tunisie', 'grèce', 'croatie', 'suisse', 'belgique', 'pays-bas',
-      'norvège', 'suède', 'danemark', 'islande', 'irlande', 'ecosse',
-      'angleterre', 'pologne', 'république tchèque', 'hongrie', 'autriche',
-      'europe', 'méditerranée', 'scandinavie', 'balkans'
-    ];
-
-    const hasKeyword = travelKeywords.some(keyword => 
-      queryLower.includes(keyword)
+    return (
+      new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 }).format(n) +
+      "€"
     );
-
-    const travelPatterns = [
-      /\b(je|j'|nous|on)\s+(veux|voudrait|aimerais|aimerions|souhaite|projette|prévoit|pense)\s+.*(partir|aller|visiter|voir|découvrir)/i,
-      /\b(où|comment|quand|combien)\s+.*(partir|aller|voyager|visiter)/i,
-      /\b(itinéraire|programme|planning|plan)\s+.*(voyage|trip|roadtrip)/i,
-      /\b(conseils?|suggestions?|recommandations?|idées?)\s+.*(voyage|destination|roadtrip)/i,
-      /\b(budget|prix|coût)\s+.*(voyage|trip|roadtrip)/i,
-      /\b(que|quoi)\s+.*(faire|voir|visiter)\s+.*(pendant|durant|lors)/i
-    ];
-
-    const hasPattern = travelPatterns.some(pattern => 
-      pattern.test(queryLower)
-    );
-
-    console.log(`🔍 Validation roadtrip pour: "${query}"`);
-    console.log(`   - Mots-clés détectés: ${hasKeyword}`);
-    console.log(`   - Patterns détectés: ${hasPattern}`);
-    
-    return hasKeyword || hasPattern;
-    
-  } catch (error) {
-    console.error("❌ Erreur dans isRoadtripRelated:", error.message);
-    return false;
-  }
-};
-
-// Extraction de la durée depuis la requête
-const extractDurationFromQuery = (query) => {
-  try {
-    if (!query || typeof query !== 'string') {
-      return null;
-    }
-
-    const queryLower = query.toLowerCase().trim();
-    
-    const monthKeywords = ['mois', 'month', 'months'];
-    const weekKeywords = ['semaine', 'semaines', 'week', 'weeks'];
-    const dayKeywords = ['jour', 'jours', 'day', 'days'];
-    
-    const numberMatches = queryLower.match(/\b(\d+)\b/g);
-    if (!numberMatches || numberMatches.length === 0) {
-      return null;
-    }
-    
-    for (const numberStr of numberMatches) {
-      const num = parseInt(numberStr, 10);
-      
-      if (isNaN(num) || num <= 0) {
-        continue;
-      }
-      
-      if (monthKeywords.some(keyword => queryLower.includes(keyword))) {
-        return num * 30;
-      }
-      
-      if (weekKeywords.some(keyword => queryLower.includes(keyword))) {
-        return num * 7;
-      }
-      
-      if (dayKeywords.some(keyword => queryLower.includes(keyword))) {
-        return num;
-      }
-    }
-    
-    return null;
-  } catch (error) {
-    console.error("❌ Erreur dans extractDurationFromQuery:", error.message);
-    return null;
-  }
-};
-
-// Service principal pour générer un itinéraire de roadtrip personnalisé
-const roadtripAdvisorService = async (options) => {
-  try {
-    const {
-      query,
-      location,
-      duration,
-      budget,
-      travelStyle,
-      interests = [],
-      includeWeather = false,
-    } = options;
-
-    console.log("🔍 Requête reçue:", query);
-
-    if (!isRoadtripRelated(query)) {
-      console.log("❌ Requête non liée aux roadtrips détectée");
-      return {
-        type: "error",
-        message: "❌ Je suis un assistant spécialisé dans les roadtrips et voyages. Je ne peux vous aider que pour planifier des itinéraires de voyage, conseiller des destinations, ou organiser des roadtrips. Pourriez-vous me poser une question liée aux voyages ?",
-        error_type: "invalid_topic"
-      };
-    }
-
-    let finalDuration = duration;
-    
-    if (!finalDuration && query) {
-      finalDuration = extractDurationFromQuery(query);
-      console.log("📅 Durée extraite:", finalDuration);
-    }
-
-    if (finalDuration && finalDuration > 14) {
-      console.log("⚠️ Durée dépassée:", finalDuration, "jours > 14 jours");
-      return {
-        type: "error",
-        message: "❌ La durée maximale pour un roadtrip est de 2 semaines (14 jours). Veuillez réduire la durée de votre voyage.",
-        max_duration: 14,
-        requested_duration: finalDuration
-      };
-    }
-
-    const cacheKey = generateCacheKey(options);
-    if (cache.has(cacheKey)) {
-      console.log("✅ Réponse récupérée depuis le cache.");
-      return cache.get(cacheKey);
-    }
-
-    let weatherInfo = null;
-    let contextAddition = "";
-
-    if (location && includeWeather) {
-      weatherInfo = await getWeatherData(location);
-      if (weatherInfo) {
-        contextAddition += `Météo actuelle à ${location} : ${weatherInfo.condition}, ${weatherInfo.temperature}°C.`;
-      }
-    }
-
-    const systemPrompt = createSystemPrompt({
-      travelStyle,
-      duration: finalDuration,
-      budget,
-      interests,
-      contextAddition,
-    });
-
-    const userPrompt = query;
-
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.7,
-      response_format: { type: "json_object" },
-    });
-
-    const content = response?.choices?.[0]?.message?.content;
-    if (!content) {
-      return { type: "error", message: "Aucune réponse générée." };
-    }
-
-    const parsed = JSON.parse(content);
-    const finalResponse = {
-      ...parsed,
-      generated_at: new Date().toISOString(),
-      location,
-      ...(weatherInfo && {
-        meteo_actuelle: {
-          lieu: location,
-          condition: weatherInfo.condition,
-          temperature: `${weatherInfo.temperature}°C`,
-        },
-      }),
-    };
-
-    cache.set(cacheKey, finalResponse);
-    return finalResponse;
-  } catch (error) {
-    console.error("❌ Erreur dans roadtripAdvisorService :", error.message);
-    return {
-      type: "error",
-      message: "Erreur lors de la génération des recommandations.",
-      error: error.message,
-    };
-  }
-};
-
-// Prompt système destiné à guider l'IA
-const createSystemPrompt = ({
-  travelStyle,
-  duration,
-  budget,
-  interests,
-  contextAddition,
-}) => {
-  let prompt = `
-Tu es un expert en organisation de roadtrips. Génère un itinéraire structuré au format JSON suivant :
-
-🚨 RÈGLE IMPORTANTE : La durée maximale pour un roadtrip est de 14 jours (2 semaines). Ne génère jamais d'itinéraires dépassant cette limite.
-
-{
-  "type": "roadtrip_itinerary",
-  "destination": "Nom du pays ou région",
-  "duree_recommandee": "X jours (maximum 14 jours)",
-  "budget_estime": {
-    "montant": "XXX€",
-    "details": {
-      "hebergement": "XX€/jour",
-      "nourriture": "XX€/jour",
-      "carburant": "XX€/jour",
-      "activites": "XX€/jour"
-    }
-  },
-  "saison_ideale": "Saison conseillée",
-  "itineraire": [
-    {
-      "jour": 1,
-      "trajet": "Ville de départ → Ville d'arrivée",
-      "distance": "en km",
-      "etapes_recommandees": ["Lieu 1", "Lieu 2"],
-      "hebergement": "Type ou nom de logement",
-      "activites": ["Activité 1", "Activité 2"]
-    }
-  ],
-  "conseils_route": ["Conseil 1", "Conseil 2"],
-  "equipement_essentiel": ["Objet 1", "Objet 2"],
-  "meteo_actuelle": {
-    "lieu": "Nom de la ville",
-    "condition": "Ciel clair",
-    "temperature": "25°C"
+  } catch {
+    return `${Math.round(n)}€`;
   }
 }
 
-Remplis le champ "meteo_actuelle" uniquement si des données météo sont fournies.
+function ensureShape(obj) {
+  const out = {};
+  out.type = "roadtrip_itinerary";
+  out.destination = obj?.destination?.trim() || "Destination inconnue";
+  out.duree_recommandee = obj?.duree_recommandee?.trim() || "X jours";
 
-Utilise des lieux réels, donne des conseils utiles, et adapte les suggestions au climat si connu.`.trim();
+  const be = obj?.budget_estime || {};
+  const details = {
+    transport: be.transport || be.transports || null,
+    hebergement: be.hebergement || be.logement || null,
+    nourriture: be.nourriture || be.repas || null,
+    activites: be.activites || null,
+  };
+  let total =
+    be.total ||
+    be.montant ||
+    (() => {
+      const sum =
+        parseAmountToNumber(details.transport) +
+        parseAmountToNumber(details.hebergement) +
+        parseAmountToNumber(details.nourriture) +
+        parseAmountToNumber(details.activites);
+      return sum > 0 ? formatEuro(sum) : null;
+    })();
 
-  if (travelStyle) prompt += `\nStyle : ${travelStyle}.`;
-  if (duration) prompt += `\nDurée : ${duration} jours (maximum 14 jours autorisés).`;
-  if (budget) prompt += `\nBudget : ${budget}€.`;
-  if (interests.length) prompt += `\nIntérêts : ${interests.join(", ")}.`;
-  if (contextAddition) {
-    prompt += `\n\nInformations supplémentaires à prendre en compte :\n${contextAddition}\n`;
-    prompt += `Incorpore ces informations dans l'itinéraire, les activités ou les conseils.`;
-  }
+  out.budget_estime = {
+    total: total || "À définir",
+    transport: details.transport || "À définir",
+    hebergement: details.hebergement || "À définir",
+    nourriture: details.nourriture || "À définir",
+    activites: details.activites || "À définir",
+  };
 
-  return prompt;
-};
+  out.saison_ideale = obj?.saison_ideale?.trim() || "Inconnue";
+  out.points_interet = Array.isArray(obj?.points_interet)
+    ? obj.points_interet.map(String)
+    : [];
 
-// Génère une clé de cache
-const generateCacheKey = (options) => {
-  return `roadtrip_${Buffer.from(
-    JSON.stringify({
-      query: options.query,
-      location: options.location,
-      duration: options.duration,
-      budget: options.budget,
-      travelStyle: options.travelStyle,
-      interests: (options.interests || []).sort(),
-    })
-  ).toString("base64")}`;
-};
+  out.itineraire = Array.isArray(obj?.itineraire)
+    ? obj.itineraire.map((j, i) => ({
+        jour: Number.isFinite(j?.jour) ? j.jour : i + 1,
+        lieu: j?.lieu?.trim() || "Lieu non défini",
+        description: j?.description?.trim() || "",
+        activites: Array.isArray(j?.activites) ? j.activites.map(String) : [],
+        distance: j?.distance || "À définir",
+        temps_conduite: j?.temps_conduite || "À définir",
+        hebergement: j?.hebergement || undefined,
+      }))
+    : [];
 
-// Récupère la météo actuelle via OpenWeatherMap
-const getWeatherData = async (location) => {
+  out.conseils = Array.isArray(obj?.conseils) ? obj.conseils.map(String) : [];
+
+  return out;
+}
+
+/*  Fallback basique */
+function generateFallbackItinerary(location, duration) {
+  return ensureShape({
+    destination: location || "Destination inconnue",
+    duree_recommandee: `${duration || 7} jours`,
+    budget_estime: {
+      total: "À définir",
+      transport: "À définir",
+      hebergement: "À définir",
+      nourriture: "À définir",
+      activites: "À définir",
+    },
+    saison_ideale: "Inconnue",
+    points_interet: [],
+    itineraire: [],
+    conseils: [],
+  });
+}
+
+/*  API Météo */
+async function getWeatherInfo(city, days = 7) {
   try {
-    const WEATHER_API_KEY = process.env.WEATHER_API_KEY;
-    if (!WEATHER_API_KEY) return null;
-
-    const { data } = await axios.get(
-      "https://api.openweathermap.org/data/2.5/weather",
-      {
-        params: {
-          q: location,
-          appid: WEATHER_API_KEY,
-          units: "metric",
-          lang: "fr",
-        },
-      }
+    const geoRes = await axios.get(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
+        city
+      )}&count=1&language=fr&format=json`
     );
-
-    return {
-      condition: data.weather[0].description,
-      temperature: data.main.temp,
-    };
-  } catch (error) {
-    console.error("❌ Erreur lors de la récupération météo :", error.message);
+    if (!geoRes.data.results?.length) return null;
+    const { latitude, longitude } = geoRes.data.results[0];
+    const meteoRes = await axios.get(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=${Math.min(
+        days,
+        15
+      )}&timezone=auto&language=fr`
+    );
+    return meteoRes.data.daily || null;
+  } catch (err) {
+    logger.warn(`Impossible de récupérer la météo: ${err.message}`);
     return null;
   }
-};
+}
 
-module.exports = { roadtripAdvisorService };
+/* ==============================
+   OpenAI + Prompt
+============================== */
+const SYSTEM_PROMPT = `
+Tu es un expert en organisation de voyages et en création d'itinéraires immersifs.
+La destination doit être extraite ou déduite de la requête utilisateur.
+Toujours répondre en français.
+NE JAMAIS ajouter de texte en dehors de l'objet JSON.
+Remplis TOUS les champs, même par "À définir" si aucune info.
+
+IMPORTANT : les champs "distance" et "temps_conduite" doivent contenir des estimations réalistes (pas "À définir").
+
+{
+  "type": "roadtrip_itinerary",
+  "destination": "Nom du pays ou ville",
+  "duree_recommandee": "X jours",
+  "budget_estime": {
+    "total": "valeur + devise",
+    "transport": "valeur + devise",
+    "hebergement": "valeur + devise",
+    "nourriture": "valeur + devise",
+    "activites": "valeur + devise"
+  },
+  "saison_ideale": "Saison(s) idéale(s)",
+  "points_interet": ["Nom lieu 1", "Nom lieu 2", "Nom lieu 3"],
+  "itineraire": [
+    {
+      "jour": 1,
+      "lieu": "Nom du lieu",
+      "description": "Résumé inspirant",
+      "activites": ["Activité 1", "Activité 2"],
+      "distance": "XX km",
+      "temps_conduite": "Xh",
+      "hebergement": "Nom ou type"
+    }
+  ],
+  "conseils": ["Conseil 1", "Conseil 2"],
+}
+`.trim();
+
+async function callOpenAIWithRetry(messages, retries = 2) {
+  let lastError;
+  for (let attempt = 1; attempt <= retries + 1; attempt++) {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages,
+        max_tokens: 1500,
+        temperature: 0.7,
+      });
+      
+      logger.info(`✅ OpenAI réponse reçue (tentative ${attempt})`);
+      return response;
+      
+    } catch (err) {
+      lastError = err;
+      logger.warn(`⚠️ Tentative OpenAI ${attempt} échouée: ${err.message}`);
+      if (attempt <= retries) {
+        await new Promise((res) => setTimeout(res, 1000 * attempt));
+      }
+    }
+  }
+  throw lastError;
+}
+
+/* ==============================
+   Service principal
+============================== */
+async function generateRoadtripAdvisor(options) {
+  const t0 = Date.now();
+
+  if (!isRoadtripRelated(options.query)) {
+    return { type: "error", message: "Requête non liée à un roadtrip." };
+  }
+
+  if (!options.duration) {
+    const { days, error } = extractDurationFromQuery(options.query);
+    if (error) return { type: "error", message: error };
+    options.duration = days || 7;
+  }
+  if (options.duration > 15) {
+    return { type: "error", message: "⛔ Limité à 15 jours maximum." };
+  }
+
+  const cacheKey = generateCacheKey(options);
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    logger.info('📦 Réponse depuis le cache');
+    return cached;
+  }
+
+  try {
+    logger.info(`🤖 Appel OpenAI pour: "${options.query}" (${options.duration} jours)`);
+    
+    const response = await callOpenAIWithRetry([
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: options.query },
+    ]);
+
+    const raw = response.choices?.[0]?.message?.content?.trim() || "";
+    const json = parseStrictJSON(raw);
+    const itinerary = ensureShape(json);
+
+    // 🔥 Ajouter la météo pour chaque jour
+    if (Array.isArray(itinerary.itineraire) && itinerary.itineraire.length) {
+      logger.info('🌤️ Ajout informations météo...');
+      for (let i = 0; i < Math.min(itinerary.itineraire.length, 5); i++) { // Limiter à 5 pour éviter rate limit
+        const jour = itinerary.itineraire[i];
+        const lieu =
+          jour?.lieu && jour.lieu !== "Lieu non défini"
+            ? jour.lieu
+            : itinerary.destination;
+        if (!lieu) {
+          jour.meteo = "À définir";
+          continue;
+        }
+        try {
+          const daily = await getWeatherInfo(lieu, 1);
+          if (
+            daily &&
+            daily.temperature_2m_max &&
+            daily.temperature_2m_min &&
+            daily.precipitation_sum
+          ) {
+            const tmin = daily.temperature_2m_min[0];
+            const tmax = daily.temperature_2m_max[0];
+            const prcp = daily.precipitation_sum[0];
+            jour.meteo = `${Math.round(tmin)}°C – ${Math.round(
+              tmax
+            )}°C, précipitations: ${Math.round(prcp)} mm`;
+          } else {
+            jour.meteo = "À définir";
+          }
+        } catch {
+          jour.meteo = "À définir";
+        }
+      }
+    }
+
+    cache.set(cacheKey, itinerary);
+
+    if (metrics?.httpRequestDuration?.observe) {
+      metrics.httpRequestDuration.observe(
+        { method: "POST", route: "/ask", status_code: 200 },
+        (Date.now() - t0) / 1000
+      );
+    }
+
+    logger.info(`✅ Itinéraire généré: ${itinerary.destination} (${(Date.now() - t0)}ms)`);
+    return itinerary;
+
+  } catch (error) {
+    logger.error(`❌ Erreur OpenAI: ${error.message}`);
+    if (metrics?.httpRequestDuration?.observe) {
+      metrics.httpRequestDuration.observe(
+        { method: "POST", route: "/ask", status_code: 500 },
+        (Date.now() - t0) / 1000
+      );
+    }
+    return generateFallbackItinerary(options.location, options.duration);
+  }
+}
+
+module.exports = { generateRoadtripAdvisor };

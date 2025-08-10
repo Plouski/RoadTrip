@@ -223,6 +223,7 @@ export const RoadTripSidebar = ({
   favorite,
   handleAddToFavorites,
   handleShare,
+  generatePdf,
   handleDelete,
 }: any) => {
   return (
@@ -318,7 +319,7 @@ export const RoadTripSidebar = ({
           {(canAccessPremium || !roadTrip.isPremium) && (
             <Button
               variant="outline"
-              onClick={() => generateRoadtripPdf(roadTrip.title || "roadtrip")}
+              onClick={generatePdf}
               className="w-full justify-between"
             >
               <span>Télécharger PDF</span>
@@ -368,27 +369,4 @@ export const RoadTripSidebar = ({
       </div>
     </div>
   );
-};
-
-// Génération PDF
-export const generateRoadtripPdf = async (fileName = "roadtrip") => {
-  const input = document.getElementById("roadtrip-pdf");
-  if (!input) return;
-
-  window.scrollTo(0, 0);
-
-  const canvas = await html2canvas(input, {
-    scale: 2,
-    useCORS: true,
-    scrollY: -window.scrollY,
-  });
-
-  const imgData = canvas.toDataURL("image/png");
-  const pdf = new jsPDF("p", "mm", "a4");
-
-  const pdfWidth = pdf.internal.pageSize.getWidth();
-  const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-  pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-  pdf.save(`${fileName}.pdf`);
 };

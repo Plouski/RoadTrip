@@ -12,8 +12,6 @@ interface AssistantSidebarProps {
   showCurrentConversation?: boolean;
   isMobile: boolean;
   onNewConversation: () => void;
-  onDownloadPDF: () => void;
-  downloadDisabled?: boolean;
 }
 
 export const AssistantSidebar = memo(({
@@ -23,8 +21,6 @@ export const AssistantSidebar = memo(({
   showCurrentConversation = false,
   isMobile,
   onNewConversation,
-  onDownloadPDF,
-  downloadDisabled = false
 }: AssistantSidebarProps) => {
   if (!isOpen && isMobile) return null;
 
@@ -118,23 +114,6 @@ export const AssistantSidebar = memo(({
               </span>
             </Button>
           </Link>
-
-          {/* Télécharger PDF */}
-          <Button
-            onClick={onDownloadPDF}
-            variant="outline"
-            disabled={downloadDisabled}
-            className={`${
-              !isOpen
-                ? "md:p-3 md:w-12 md:h-12 md:rounded-full md:justify-center"
-                : "w-full py-4 rounded-xl justify-start"
-            }`}
-          >
-            <Download className="h-5 w-5 text-stone-600" />
-            <span className={`${!isOpen && "md:hidden"} ml-3 text-stone-700`}>
-              Télécharger PDF
-            </span>
-          </Button>
         </div>
 
         {/* Footer */}

@@ -1,8 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminService } from "@/services/admin-service";
+import {
+  Loader2,
+  MoreVertical,
+  Eye,
+  Edit,
+  Trash2,
+  Search,
+  Check,
+  X,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertMessage } from "@/components/ui/alert-message";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -10,8 +23,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -20,6 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,199 +47,272 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Badge } from "@/components/ui/badge";
-import { AlertMessage } from "@/components/ui/alert-message";
-import {
-  Loader2,
-  MoreVertical,
-  Eye,
-  Edit,
-  Trash2,
-  Check,
-  X,
-  Search,
-} from "lucide-react";
 
-type User = {
+export type AdminUser = {
   _id: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
-  role: "user" | "premium" | "admin";
-  isVerified: boolean;
+  role?: "user" | "premium" | "admin";
+  isVerified?: boolean;
+  createdAt?: string;
 };
 
-type AlertType = "success" | "error" | null;
+function useDebouncedValue<T>(value: T, delay = 400) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return debounced;
+}
+
+function SearchInput({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="relative w-full max-w-sm">
+      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <Input
+        className="pl-8"
+        placeholder="Rechercher par email, prénom, nom"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function VerifyBadge({ verified }: { verified?: boolean }) {
+  return (
+    <Badge
+      variant="outline"
+      className={
+        verified
+          ? "bg-green-50 text-green-700 border-green-200"
+          : "bg-slate-50 text-slate-700 border-slate-200"
+      }
+    >
+      {verified ? "Vérifié" : "Non vérifié"}
+    </Badge>
+  );
+}
+
+function RoleBadge({ role }: { role?: string }) {
+  const map: Record<string, string> = {
+    admin: "border-red-200 bg-red-50 text-red-800",
+    premium: "border-amber-200 bg-amber-50 text-amber-800",
+    user: "border-slate-200 bg-slate-50 text-slate-700",
+  };
+  const klass = role ? map[role] ?? map.user : map.user;
+  const label = role ? role.charAt(0).toUpperCase() + role.slice(1) : "User";
+  return (
+    <Badge variant="outline" className={klass}>
+      {label}
+    </Badge>
+  );
+}
+
+function PaginationControls({
+  page,
+  total,
+  pageSize = 10,
+  setPage,
+}: {
+  page: number;
+  total: number;
+  pageSize?: number;
+  setPage: (p: number) => void;
+}) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  return (
+    <Pagination>
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            onClick={() => page > 1 && setPage(page - 1)}
+            className={page === 1 ? "pointer-events-none opacity-50" : ""}
+          />
+        </PaginationItem>
+        {Array.from({ length: pages }, (_, i) => (
+          <PaginationItem key={i}>
+            <PaginationLink
+              isActive={page === i + 1}
+              onClick={() => setPage(i + 1)}
+            >
+              {i + 1}
+            </PaginationLink>
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          <PaginationNext
+            onClick={() => page < pages && setPage(page + 1)}
+            className={page >= pages ? "pointer-events-none opacity-50" : ""}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
 
 export default function UsersListPage() {
   const router = useRouter();
-
-  const [users, setUsers] = useState<User[]>([]);
-  const [totalUsers, setTotalUsers] = useState<number>(0);
+  const [items, setItems] = useState<AdminUser[]>([]);
+  const [total, setTotal] = useState<number>(0);
   const [page, setPage] = useState<number>(1);
+  const pageSize = 10;
   const [search, setSearch] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [alertMessage, setAlertMessage] = useState<string>("");
-  const [alertType, setAlertType] = useState<AlertType>(null);
+  const debouncedSearch = useDebouncedValue(search, 400);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [processing, setProcessing] = useState<boolean>(false);
+  const [alert, setAlert] = useState<{
+    message: string;
+    type: "success" | "error" | null;
+  }>({ message: "", type: null });
 
-  // Chargement des utilisateurs au changement de page ou de recherche
   useEffect(() => {
     loadUsers();
-  }, [page, search]);
+  }, [page, debouncedSearch]);
 
-  // Fonction pour charger les utilisateurs depuis l’API
-  const loadUsers = async (): Promise<void> => {
-    setIsLoading(true);
+  const loadUsers = async () => {
+    setLoading(true);
     try {
-      const res = await AdminService.getUsers(page, 10, search);
-      setUsers(res.users);
-      setTotalUsers(res.total);
-    } catch (error) {
+      const res = await AdminService.getUsers(page, pageSize, debouncedSearch);
+      setItems(res.users || []);
+      setTotal(res.pagination?.total ?? res.total ?? 0);
+    } catch (e) {
       showAlert("Erreur lors du chargement des utilisateurs", "error");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // Fonction pour activer ou désactiver un utilisateur
-  const toggleStatus = async (
-    userId: string,
-    currentStatus: boolean
-  ): Promise<void> => {
+  const showAlert = (message: string, type: "success" | "error") => {
+    setAlert({ message, type });
+    setTimeout(() => setAlert({ message: "", type: null }), 3500);
+  };
+
+  const toggleVerify = async (id: string, current?: boolean) => {
     try {
-      setIsProcessing(true);
-      await AdminService.updateUserStatus(userId, !currentStatus);
-      setUsers((prev) =>
-        prev.map((u) =>
-          u._id === userId ? { ...u, isVerified: !currentStatus } : u
-        )
+      setProcessing(true);
+      await AdminService.updateUserStatus(id, !current);
+      setItems((prev) =>
+        prev.map((u) => (u._id === id ? { ...u, isVerified: !current } : u))
       );
-      showAlert("Statut mis à jour", "success");
-    } catch (error) {
-      showAlert("Échec de mise à jour du statut", "error");
+      showAlert("Statut vérification mis à jour", "success");
+    } catch (e) {
+      showAlert("Échec de mise à jour", "error");
     } finally {
-      setIsProcessing(false);
+      setProcessing(false);
     }
   };
 
-  // Fonction pour supprimer un utilisateur
-  const deleteUser = async (userId: string): Promise<void> => {
+  const deleteUser = async (id: string) => {
     if (!confirm("Voulez-vous vraiment supprimer cet utilisateur ?")) return;
-    setIsProcessing(true);
     try {
-      await AdminService.deleteUser(userId);
+      setProcessing(true);
+      await AdminService.deleteUser(id);
       await loadUsers();
-      showAlert("Utilisateur supprimé", "success");
-    } catch (error) {
+      showAlert("Utilisateur supprimé avec succès", "success");
+    } catch (e) {
       showAlert("Erreur lors de la suppression", "error");
     } finally {
-      setIsProcessing(false);
+      setProcessing(false);
     }
   };
 
-  // Affiche un message d’alerte temporaire
-  const showAlert = (message: string, type: AlertType): void => {
-    setAlertMessage(message);
-    setAlertType(type);
-    setTimeout(() => {
-      setAlertMessage("");
-      setAlertType(null);
-    }, 4000);
-  };
+  const emptyText = useMemo(
+    () =>
+      debouncedSearch
+        ? "Aucun résultat pour votre recherche"
+        : "Aucun utilisateur trouvé",
+    [debouncedSearch]
+  );
 
   return (
     <div className="container">
-      {/* En-tête */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Gestion des utilisateurs</h1>
+      {/* Header */}
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold sm:text-2xl">
+          Gestion des utilisateurs
+        </h1>
       </div>
 
-      {/* Message d’alerte */}
-      {alertMessage && (
-        <div className="mb-6">
-          <AlertMessage message={alertMessage} type={alertType} />
+      {/* Alert */}
+      {alert.message && (
+        <div className="mb-4">
+          <AlertMessage message={alert.message} type={alert.type} />
         </div>
       )}
 
-      {/* Barre de recherche */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="relative w-full max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            placeholder="Rechercher par nom ou email"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+      {/* Search */}
+      <div className="mb-4 flex items-center gap-2">
+        <div className="w-full">
+          <SearchInput value={search} onChange={setSearch} />
         </div>
       </div>
 
-      {/* Liste des utilisateurs */}
+      {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle>Utilisateurs</CardTitle>
-          <CardDescription>Liste des utilisateurs enregistrés</CardDescription>
+          <CardDescription>Liste des utilisateurs</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-auto rounded border">
-            <Table>
-              <TableHeader>
+        <CardContent className="p-4 sm:p-6">
+          <div className="overflow-x-auto rounded border">
+            <Table className="min-w-[720px]">
+              <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Rôle</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="whitespace-nowrap">Nom</TableHead>
+                  <TableHead className="whitespace-nowrap">Email</TableHead>
+                  <TableHead className="whitespace-nowrap">Rôle</TableHead>
+                  <TableHead className="whitespace-nowrap">
+                    Vérification
+                  </TableHead>
+                  <TableHead className="text-right whitespace-nowrap">
+                    Actions
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* Affichage du loader ou des utilisateurs */}
-                {isLoading ? (
+                {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-10">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                    <TableCell colSpan={5} className="py-10 text-center">
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                     </TableCell>
                   </TableRow>
-                ) : users.length === 0 ? (
+                ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-10">
-                      Aucun utilisateur trouvé
+                    <TableCell colSpan={5} className="py-10 text-center">
+                      {emptyText}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => (
-                    <TableRow key={user._id}>
-                      <TableCell>
-                        {user.firstName} {user.lastName}
+                  items.map((u) => (
+                    <TableRow key={u._id} className="align-top">
+                      <TableCell className="max-w-[220px]">
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">
+                            {[u.firstName, u.lastName]
+                              .filter(Boolean)
+                              .join(" ") || "Utilisateur"}
+                          </div>
+                        </div>
                       </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            user.role === "admin"
-                              ? "default"
-                              : user.role === "premium"
-                              ? "premium"
-                              : "outline"
-                          }
-                        >
-                          {user.role === "admin"
-                            ? "Admin"
-                            : user.role === "premium"
-                            ? "Premium"
-                            : "Utilisateur"}
-                        </Badge>
+                      <TableCell className="max-w-[260px]">
+                        <div className="truncate">{u.email}</div>
                       </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={user.isVerified ? "success" : "secondary"}
-                        >
-                          {user.isVerified ? "Actif" : "Inactif"}
-                        </Badge>
+                      <TableCell className="whitespace-nowrap">
+                        <RoleBadge role={u.role} />
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <VerifyBadge verified={u.isVerified} />
                       </TableCell>
                       <TableCell className="text-right">
-                        {/* Menu d’actions */}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
@@ -237,37 +322,37 @@ export default function UsersListPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
                               onClick={() =>
-                                router.push(`/admin/user/${user._id}`)
+                                router.push(`/admin/user/${u._id}`)
                               }
                             >
                               <Eye className="mr-2 h-4 w-4" /> Voir
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() =>
-                                router.push(`/admin/user/edit/${user._id}`)
+                                router.push(`/admin/user/update/${u._id}`)
                               }
                             >
                               <Edit className="mr-2 h-4 w-4" /> Modifier
                             </DropdownMenuItem>
                             <DropdownMenuItem
-                              onClick={() =>
-                                toggleStatus(user._id, user.isVerified)
-                              }
-                              disabled={isProcessing}
+                              onClick={() => toggleVerify(u._id, u.isVerified)}
+                              disabled={processing}
                             >
-                              {user.isVerified ? (
+                              {u.isVerified ? (
                                 <>
-                                  <X className="mr-2 h-4 w-4" /> Désactiver
+                                  <X className="mr-2 h-4 w-4" /> Marquer non
+                                  vérifié
                                 </>
                               ) : (
                                 <>
-                                  <Check className="mr-2 h-4 w-4" /> Activer
+                                  <Check className="mr-2 h-4 w-4" /> Marquer
+                                  vérifié
                                 </>
                               )}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => deleteUser(user._id)}
+                              onClick={() => deleteUser(u._id)}
                               className="text-red-600"
                             >
                               <Trash2 className="mr-2 h-4 w-4" /> Supprimer
@@ -284,40 +369,12 @@ export default function UsersListPage() {
 
           {/* Pagination */}
           <div className="mt-4">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    onClick={() => setPage((p) => Math.max(p - 1, 1))}
-                    className={
-                      page === 1 ? "pointer-events-none opacity-50" : ""
-                    }
-                  />
-                </PaginationItem>
-
-                {Array.from({ length: Math.ceil(totalUsers / 10) }, (_, i) => (
-                  <PaginationItem key={i}>
-                    <PaginationLink
-                      isActive={page === i + 1}
-                      onClick={() => setPage(i + 1)}
-                    >
-                      {i + 1}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
-
-                <PaginationItem>
-                  <PaginationNext
-                    onClick={() => setPage((p) => p + 1)}
-                    className={
-                      page >= Math.ceil(totalUsers / 10)
-                        ? "pointer-events-none opacity-50"
-                        : ""
-                    }
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
+            <PaginationControls
+              page={page}
+              total={total}
+              pageSize={pageSize}
+              setPage={setPage}
+            />
           </div>
         </CardContent>
       </Card>

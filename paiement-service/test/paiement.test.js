@@ -72,12 +72,16 @@ jest.mock('../utils/logger', () => ({
   logger: {
     info: jest.fn(),
     error: jest.fn(),
-    warn: jest.fn()
+    warn: jest.fn(),
+    middleware: jest.fn(() => (req, res, next) => next()) // ✅ retourne une fonction Express
   },
   stream: {
     write: jest.fn()
-  }
+  },
+  middleware: jest.fn(() => (req, res, next) => next()) // ✅ idem ici
 }));
+
+
 
 // Mock de la DB connection
 jest.mock('../config/db', () => jest.fn().mockResolvedValue({}));

@@ -117,7 +117,6 @@ export default function CreateRoadTrip() {
   const [tempPointOfInterest, setTempPointOfInterest] =
     useState<PointOfInterest>(INITIAL_POI_STATE);
 
-  // Affiche un message d'alerte
   const showAlert = useCallback(
     (message: string, type: "success" | "error") => {
       setAlertMessage("");

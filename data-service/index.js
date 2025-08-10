@@ -3,6 +3,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const helmet = require('helmet');
 const cors = require('cors');
+const logger = require('./utils/logger');
 
 // Import des métriques générales
 const {
@@ -19,7 +20,7 @@ const app = express();
 const PORT = process.env.PORT || 5002;
 const SERVICE_NAME = "data-service";
 
-console.log(`🚀 Démarrage du ${SERVICE_NAME}...`);
+logger.info(`🚀 Démarrage du ${SERVICE_NAME}...`);
 
 // VALIDATION VARIABLES D'ENVIRONNEMENT (seulement si pas en test)
 if (process.env.NODE_ENV !== 'test') {
@@ -34,18 +35,18 @@ if (process.env.NODE_ENV !== 'test') {
     .map(([key]) => key);
 
   if (missingVars.length > 0) {
-    console.error('❌ Variables d\'environnement manquantes:');
+    logger.error('❌ Variables d\'environnement manquantes:');
     missingVars.forEach(varName => {
-      console.error(`   - ${varName}`);
+      logger.error(`   - ${varName}`);
     });
-    console.error('\n💡 Créez un fichier .env avec ces variables:');
-    console.error('   MONGODB_URI=mongodb://localhost:27017/roadtrip-dev');
-    console.error('   JWT_SECRET=your-secret-key-here');
-    console.error('   JWT_REFRESH_SECRET=your-refresh-secret-here');
+    logger.error('\n💡 Créez un fichier .env avec ces variables:');
+    logger.error('   MONGODB_URI=mongodb://localhost:27017/roadtrip-dev');
+    logger.error('   JWT_SECRET=your-secret-key-here');
+    logger.error('   JWT_REFRESH_SECRET=your-refresh-secret-here');
     process.exit(1);
   }
 
-  console.log('✅ Variables d\'environnement validées');
+  logger.info('✅ Variables d\'environnement validées');
 }
 
 // MIDDLEWARES BASIQUES
@@ -61,7 +62,7 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.error("❌ Origin non autorisée par CORS:", origin);
+      logger.error("❌ Origin non autorisée par CORS:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -102,7 +103,7 @@ app.use((req, res, next) => {
     
     // Logging (seulement si pas en test)
     if (process.env.NODE_ENV !== 'test') {
-      console.log(`${req.method} ${req.path} - ${res.statusCode} - ${Math.round(duration * 1000)}ms`);
+      logger.info(`${req.method} ${req.path} - ${res.statusCode} - ${Math.round(duration * 1000)}ms`);
     }
   });
   
@@ -345,7 +346,7 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   if (process.env.NODE_ENV !== 'test') {
-    console.error(`❌ Erreur ${SERVICE_NAME}:`, err.message);
+    logger.error(`❌ Erreur ${SERVICE_NAME}:`, err.message);
   }
   
   // Erreurs MongoDB
@@ -379,25 +380,25 @@ if (process.env.NODE_ENV !== 'test') {
   async function startServer() {
     try {
       await mongoose.connect(process.env.MONGODB_URI);
-      console.log('✅ MongoDB connecté');
+      logger.info('✅ MongoDB connecté');
       updateDatabaseHealth('mongodb', true);
 
       const server = app.listen(PORT, () => {
-        console.log(`💾 ${SERVICE_NAME} démarré sur le port ${PORT}`);
-        console.log(`📋 Documentation: http://localhost:${PORT}/docs`);
-        console.log(`❤️ Health check: http://localhost:${PORT}/health`);
-        console.log(`📈 Vitals: http://localhost:${PORT}/vitals`);
-        console.log(`📊 Métriques: http://localhost:${PORT}/metrics`);
-        console.log(`🔗 Intégrations: Notification (${process.env.NOTIFICATION_SERVICE_URL || '5005'}), AI, Payment`);
+        logger.info(`💾 ${SERVICE_NAME} démarré sur le port ${PORT}`);
+        logger.info(`📋 Documentation: http://localhost:${PORT}/docs`);
+        logger.info(`❤️ Health check: http://localhost:${PORT}/health`);
+        logger.info(`📈 Vitals: http://localhost:${PORT}/vitals`);
+        logger.info(`📊 Métriques: http://localhost:${PORT}/metrics`);
+        logger.info(`🔗 Intégrations: Notification (${process.env.NOTIFICATION_SERVICE_URL || '5005'}), AI, Payment`);
         
         // Initialisation des métriques
         updateServiceHealth(SERVICE_NAME, true);
         
-        console.log(`\n🚀 ${SERVICE_NAME} prêt !`);
+        logger.info(`\n🚀 ${SERVICE_NAME} prêt !`);
       });
 
     } catch (error) {
-      console.error('❌ Erreur démarrage:', error);
+      logger.error('❌ Erreur démarrage:', error);
       updateServiceHealth(SERVICE_NAME, false);
       process.exit(1);
     }
@@ -405,16 +406,16 @@ if (process.env.NODE_ENV !== 'test') {
 
   // ARRÊT GRACIEUX
   async function gracefulShutdown(signal) {
-    console.log(`🔄 Arrêt ${SERVICE_NAME} (${signal})...`);
+    logger.info(`🔄 Arrêt ${SERVICE_NAME} (${signal})...`);
     
     updateServiceHealth(SERVICE_NAME, false);
     updateActiveConnections(0);
     
     try {
       await mongoose.connection.close();
-      console.log('✅ MongoDB fermé proprement');
+      logger.info('✅ MongoDB fermé proprement');
     } catch (error) {
-      console.error('❌ Erreur fermeture MongoDB:', error);
+      logger.error('❌ Erreur fermeture MongoDB:', error);
     }
     
     setTimeout(() => {
@@ -426,12 +427,12 @@ if (process.env.NODE_ENV !== 'test') {
   process.on('SIGINT', gracefulShutdown);
 
   process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection:', reason);
+    logger.error('Unhandled Rejection:', reason);
     updateServiceHealth(SERVICE_NAME, false);
   });
 
   process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
+    logger.error('Uncaught Exception:', error);
     updateServiceHealth(SERVICE_NAME, false);
     process.exit(1);
   });

@@ -17,4 +17,4 @@ mettre le message d'erreur pour dire que l'ia peut faire 2 semaines maximum
 
 data-service : pas recu l'email du nouveau utilisateur qui vient de s'inscrire (OK)
 
-améliorer le PDF
+améliorer le PDF : OK

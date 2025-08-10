@@ -1,4 +1,4 @@
-const { logger } = require('../utils/logger');
+const logger = require('../utils/logger');
 const requestStore = new Map();
 
 class RateLimitMiddleware {

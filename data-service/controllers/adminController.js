@@ -190,6 +190,32 @@ const updateUserStatus = async (req, res) => {
   }
 };
 
+const getUserSubscription = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "ID utilisateur invalide" });
+    }
+
+    const sub = await Subscription.findOne({ userId: id })
+      .sort({ createdAt: -1 })
+      .select("plan status startDate paymentMethod currentPeriodEnd createdAt")
+      .lean();
+
+    if (!sub) {
+      return res.status(200).json({ success: true, subscription: null });
+    }
+
+    return res.status(200).json({ success: true, subscription: sub });
+  } catch (error) {
+    logger.logError("Admin getUserSubscription", error);
+    return res.status(500).json({
+      success: false,
+      message: "Erreur lors de la récupération de l'abonnement",
+    });
+  }
+};
+
 /* Suppression utilisateur avec nettoyage RGPD */
 const deleteUser = async (req, res) => {
   try {
@@ -584,6 +610,7 @@ module.exports = {
   getUsers,
   getUserById,
   updateUser,
+  getUserSubscription,
   updateUserStatus,
   deleteUser,
 

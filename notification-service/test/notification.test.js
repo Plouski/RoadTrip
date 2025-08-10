@@ -48,7 +48,7 @@ describe('📧 Notification Service M2 Tests', () => {
 
   test('✅ Email confirmation endpoint (avec API key valide)', async () => {
     // Définir une API key valide pour ce test
-    process.env.API_KEY = 'test-valid-key';
+    process.env.NOTIFICATION_API_KEY = 'test-valid-key';
     
     const res = await request(app)
       .post('/api/email/confirm')
@@ -67,7 +67,7 @@ describe('📧 Notification Service M2 Tests', () => {
   });
 
   test('✅ Email endpoint avec données invalides', async () => {
-    process.env.API_KEY = 'test-valid-key';
+    process.env.NOTIFICATION_API_KEY = 'test-valid-key';
     
     const res = await request(app)
       .post('/api/email/confirm')
@@ -95,7 +95,7 @@ describe('📧 Notification Service M2 Tests', () => {
   });
 
   test('✅ SMS endpoint avec API key valide', async () => {
-    process.env.API_KEY = 'test-valid-key';
+    process.env.NOTIFICATION_API_KEY = 'test-valid-key';
     
     const res = await request(app)
       .post('/api/sms/reset')
@@ -123,7 +123,7 @@ describe('📧 Notification Service M2 Tests', () => {
   });
 
   test('✅ Validation des paramètres manquants', async () => {
-    process.env.API_KEY = 'test-valid-key';
+    process.env.NOTIFICATION_API_KEY = 'test-valid-key';
     
     const res = await request(app)
       .post('/api/email/confirm')

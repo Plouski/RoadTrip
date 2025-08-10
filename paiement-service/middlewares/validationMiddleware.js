@@ -1,4 +1,4 @@
-const { logger } = require("../utils/logger");
+const logger = require("../utils/logger");
 
 class ValidationMiddleware {
   // Validation des données de paiement

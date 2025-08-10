@@ -47,11 +47,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Check Dockerfile exists
+        run: |
+          cd ${{ matrix.service }}
+          if [ -f "Dockerfile" ]; then
+            echo "✅ Dockerfile trouvé pour ${{ matrix.service }}"
+            ls -la Dockerfile
+          else
+            echo "❌ Dockerfile manquant pour ${{ matrix.service }}"
+            echo "Fichiers disponibles:"
+            ls -la
+          fi
+      
       - name: Build Docker image
         run: |
           cd ${{ matrix.service }}
-          docker build -t roadtrip-${{ matrix.service }}:latest . || echo "⚠️ Build échoué"
-          echo "✅ Image roadtrip-${{ matrix.service }} créée"
+          if [ -f "Dockerfile" ]; then
+            docker build -t roadtrip-${{ matrix.service }}:latest . || echo "⚠️ Build échoué pour ${{ matrix.service }}"
+            echo "✅ Image roadtrip-${{ matrix.service }} créée"
+          else
+            echo "⚠️ Skip build - pas de Dockerfile pour ${{ matrix.service }}"
+          fi
 
   # DÉPLOIEMENT
   deploy:

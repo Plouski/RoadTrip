@@ -1,17 +1,16 @@
 import { AuthService } from "./auth-service";
 
-const AI_SERVICE_URL =
-  process.env.NEXT_PUBLIC_AI_SERVICE_URL || "http://localhost:5003";
+const AI_SERVICE_URL = process.env.NEXT_PUBLIC_AI_SERVICE_URL || "http://localhost:5003";
 
 export const AiService = {
   /**
    * Envoie une question à l'assistant IA et récupère la réponse
    */
-  async askAssistant(query: string, params: any = {}): Promise<any> {
+  async askAssistant(query, params = {}) {
     try {
       const token = AuthService.getAuthToken();
 
-      const headers: HeadersInit = {
+      const headers = {
         "Content-Type": "application/json",
       };
 
@@ -26,9 +25,7 @@ export const AiService = {
       });
 
       if (!response.ok) {
-        throw new Error(
-          `Erreur HTTP ${response.status}: ${response.statusText}`
-        );
+        throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
       }
 
       return await response.json();
@@ -41,11 +38,7 @@ export const AiService = {
   /**
    * Sauvegarde un message dans une conversation
    */
-  async saveMessage(
-    role: string,
-    content: string,
-    conversationId: string
-  ): Promise<any> {
+  async saveMessage(role, content, conversationId) {
     try {
       const token = AuthService.getAuthToken();
 
@@ -59,9 +52,7 @@ export const AiService = {
       });
 
       if (!response.ok) {
-        throw new Error(
-          `Erreur HTTP ${response.status}: ${response.statusText}`
-        );
+        throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
       }
 
       return await response.json();
@@ -74,7 +65,7 @@ export const AiService = {
   /**
    * Récupère l'historique des conversations de l'utilisateur
    */
-  async getHistory(): Promise<any> {
+  async getHistory() {
     try {
       const token = AuthService.getAuthToken();
 
@@ -87,9 +78,7 @@ export const AiService = {
       });
 
       if (!response.ok) {
-        throw new Error(
-          `Erreur HTTP ${response.status}: ${response.statusText}`
-        );
+        throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
       }
 
       return await response.json();
@@ -102,25 +91,20 @@ export const AiService = {
   /**
    * Récupère une conversation spécifique par son ID
    */
-  async getConversationById(conversationId: string): Promise<any> {
+  async getConversationById(conversationId) {
     try {
       const token = AuthService.getAuthToken();
 
-      const response = await fetch(
-        `${AI_SERVICE_URL}/api/ai/conversation/${conversationId}`,
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        }
-      );
+      const response = await fetch(`${AI_SERVICE_URL}/api/ai/conversation/${conversationId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
 
       if (!response.ok) {
-        throw new Error(
-          `Erreur HTTP ${response.status}: ${response.statusText}`
-        );
+        throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
       }
 
       return await response.json();
@@ -133,25 +117,20 @@ export const AiService = {
   /**
    * Supprime une conversation spécifique
    */
-  async deleteConversation(conversationId: string): Promise<boolean> {
+  async deleteConversation(conversationId) {
     try {
       const token = AuthService.getAuthToken();
 
-      const response = await fetch(
-        `${AI_SERVICE_URL}/api/ai/conversation/${conversationId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token && { Authorization: `Bearer ${token}` }),
-          },
-        }
-      );
+      const response = await fetch(`${AI_SERVICE_URL}/api/ai/conversation/${conversationId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
 
       if (!response.ok) {
-        throw new Error(
-          `Erreur HTTP ${response.status}: ${response.statusText}`
-        );
+        throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
       }
 
       return true;

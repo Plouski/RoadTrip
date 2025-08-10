@@ -17,6 +17,7 @@ router.get("/users", adminController.getUsers);
 router.get("/users/:id", adminController.getUserById);
 router.put("/users/:id", adminController.updateUser);
 router.put("/users/status/:id", adminController.updateUserStatus);
+router.get("/users/:id/subscription", adminController.getUserSubscription);
 router.delete("/users/:id", adminController.deleteUser);
 
 // GESTION ROADTRIPS

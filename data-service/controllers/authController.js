@@ -869,7 +869,7 @@ class AuthController {
     }
   }
 
-  /* Met à jour le profil utilisateur */
+  /* Met à jour le profil utilisateur - FIX FINAL */
   static async updateProfile(req, res, next) {
     try {
       const userId = req.user.userId;
@@ -887,9 +887,17 @@ class AuthController {
         });
       }
 
-      const normalizedPhoneNumber = phoneNumber === "" ? null : phoneNumber;
+      // 🔥 FIX FINAL : Ne jamais mettre phoneNumber: null
+      // Si phoneNumber est vide, on ne touche pas au champ (garde undefined)
+      let shouldUpdatePhone = false;
+      let normalizedPhoneNumber;
 
-      if (normalizedPhoneNumber && normalizedPhoneNumber !== user.phoneNumber) {
+      if (phoneNumber && phoneNumber.trim() !== "") {
+        // On a un vrai numéro de téléphone
+        normalizedPhoneNumber = phoneNumber.trim();
+        shouldUpdatePhone = true;
+
+        // Vérifier l'unicité
         const existingUserWithPhone = await User.findOne({
           phoneNumber: normalizedPhoneNumber,
           _id: { $ne: userId },
@@ -906,17 +914,23 @@ class AuthController {
             },
           });
         }
+      } else if (phoneNumber === "" && user.phoneNumber) {
+        // L'utilisateur veut supprimer son numéro de téléphone
+        shouldUpdatePhone = true;
+        normalizedPhoneNumber = undefined; // Supprime le champ
       }
+      // Sinon, on ne touche pas au phoneNumber du tout
 
-      const allowedUpdates = {
-        firstName,
-        lastName,
-        phoneNumber: normalizedPhoneNumber,
-      };
+      // Mise à jour des champs autorisés
+      user.firstName = firstName;
+      user.lastName = lastName;
 
-      for (const key in allowedUpdates) {
-        if (allowedUpdates[key] !== undefined) {
-          user[key] = allowedUpdates[key];
+      // Mise à jour conditionnelle du téléphone
+      if (shouldUpdatePhone) {
+        if (normalizedPhoneNumber === undefined) {
+          user.phoneNumber = undefined; // Supprime le champ
+        } else {
+          user.phoneNumber = normalizedPhoneNumber; // Met à jour avec la nouvelle valeur
         }
       }
 
@@ -936,6 +950,7 @@ class AuthController {
           isVerified: user.isVerified,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
+          authProvider: user.oauth?.provider || "local",
         },
       });
     } catch (error) {
