@@ -1,4 +1,3 @@
-// utils/logger.js - ROADTRIP Microservices Logger
 const { createLogger, format, transports } = require('winston');
 const path = require('path');
 const fs = require('fs');
@@ -6,7 +5,6 @@ const fs = require('fs');
 const isProduction = process.env.NODE_ENV === 'production';
 const enableFileLogging = process.env.ENABLE_FILE_LOGGING === 'true' || isProduction;
 
-// 🎯 Détection automatique du service basé sur le dossier ou variable d'environnement
 const detectServiceName = () => {
   // Priorité 1: Variable d'environnement
   if (process.env.SERVICE_NAME) {
@@ -46,7 +44,7 @@ const detectServiceName = () => {
 
 const SERVICE_NAME = detectServiceName();
 
-// 📁 Structure des logs adaptée à ROADTRIP
+// Structure des logs adaptée à ROADTRIP
 const createLogsPaths = (serviceName) => {
   // CORRECTION: Vérifier si on est dans un container Docker
   const isDocker = fs.existsSync('/.dockerenv') || process.env.DOCKER_CONTAINER;
@@ -193,7 +191,7 @@ if (enableFileLogging) {
       filename: logsPaths.errorLog,
       level: 'error',
       format: jsonFormat,
-      maxsize: 50 * 1024 * 1024, // 50MB
+      maxsize: 50 * 1024 * 1024,
       maxFiles: 5,
       tailable: true
     }),
@@ -202,7 +200,7 @@ if (enableFileLogging) {
     new transports.File({
       filename: logsPaths.combinedLog,
       format: jsonFormat,
-      maxsize: 100 * 1024 * 1024, // 100MB
+      maxsize: 100 * 1024 * 1024,
       maxFiles: 10,
       tailable: true
     }),
@@ -248,8 +246,6 @@ logger.info(`${SERVICE_EMOJI} Logger ROADTRIP initialisé`, {
   enableFileLogging,
   project: 'ROADTRIP'
 });
-
-// === MÉTHODES SPÉCIALISÉES ROADTRIP ===
 
 // Log des requêtes HTTP avec contexte ROADTRIP
 logger.request = (req, res, duration) => {

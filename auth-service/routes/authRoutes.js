@@ -4,7 +4,7 @@ const AuthController = require('../controllers/authController');
 
 const router = express.Router();
 
-// ───────────── Routes OAuth Google ─────────────
+//  Routes OAuth Google 
 router.get('/oauth/google', 
   passport.authenticate('google', {
     scope: ['profile', 'email']
@@ -19,7 +19,7 @@ router.get('/oauth/google/callback',
   (req, res, next) => AuthController.handleOAuthSuccess(req, res, next)
 );
 
-// ───────────── Routes OAuth Facebook ─────────────
+//  Routes OAuth Facebook 
 router.get('/oauth/facebook',
   passport.authenticate('facebook', {
     scope: ['email', 'public_profile']
@@ -34,7 +34,7 @@ router.get('/oauth/facebook/callback',
   (req, res, next) => AuthController.handleOAuthSuccess(req, res, next)
 );
 
-// ───────────── Route de déconnexion ─────────────
+//  Route de déconnexion 
 router.post('/logout', (req, res) => {
   req.logout((err) => {
     if (err) {
@@ -57,7 +57,7 @@ router.post('/logout', (req, res) => {
   });
 });
 
-// ───────────── Route d'information ─────────────
+//  Route d'information 
 router.get('/providers', (req, res) => {
   res.json({
     providers: {

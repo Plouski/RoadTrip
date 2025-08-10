@@ -16,7 +16,7 @@ class DataService {
     });
     
     this.baseURL = `${rawBaseURL}/api`;
-    this.healthURL = `${rawBaseURL}/health`; // URL séparée pour health check
+    this.healthURL = `${rawBaseURL}/health`; 
 
     // Client principal pour API
     this.client = axios.create({
@@ -82,7 +82,6 @@ class DataService {
           responseSize: JSON.stringify(response.data).length
         });
         
-        // Log de performance si requête lente
         if (duration > 2000) {
           logger.performance('Requête data-service lente', {
             method: config.method?.toUpperCase(),
@@ -350,7 +349,7 @@ class DataService {
     }
   }
 
-  // ✅ Health check corrigé - utilise /health directement
+  // Health check
   async healthCheck() {
     const startTime = Date.now();
     
