@@ -391,28 +391,6 @@ const startTime = Date.now();
       res.json(vitals);
     });
 
-    // DOCUMENTATION API
-    app.get("/docs", (req, res) => {
-      res.json({
-        service: SERVICE_NAME,
-        version: "1.0.0",
-        description: "Service d'authentification OAuth - Conforme RNCP39583",
-        endpoints: {
-          "GET /auth/oauth/google": "Initie l'authentification Google OAuth",
-          "GET /auth/oauth/google/callback": "Callback Google OAuth",
-          "GET /auth/oauth/facebook":
-            "Initie l'authentification Facebook OAuth",
-          "GET /auth/oauth/facebook/callback": "Callback Facebook OAuth",
-          "POST /auth/logout": "Déconnexion utilisateur",
-          "GET /auth/providers": "Liste des providers OAuth disponibles",
-          "GET /health": "Status du service + métriques",
-          "GET /vitals": "Informations système (CPU, mémoire)",
-          "GET /metrics": "Métriques Prometheus",
-          "GET /docs": "Documentation API",
-        },
-      });
-    });
-
     // INFO SUR LES PROVIDERS
     app.get("/providers", (req, res) => {
       const providers = {
@@ -472,7 +450,6 @@ const startTime = Date.now();
         availableRoutes: [
           "/health",
           "/vitals",
-          "/docs",
           "/metrics",
           "/providers",
           "/auth/oauth/google",
@@ -520,7 +497,6 @@ const startTime = Date.now();
         // Log des URLs importantes
         const baseUrl = `http://localhost:${PORT}`;
         logger.info('📋 URLs du service', {
-          docs: `${baseUrl}/docs`,
           health: `${baseUrl}/health`,
           vitals: `${baseUrl}/vitals`,
           metrics: `${baseUrl}/metrics`,

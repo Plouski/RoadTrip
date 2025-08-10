@@ -1,18 +1,16 @@
 {
   "name": "ai-service",
   "version": "1.0.0",
-  "description": "",
+  "description": "Microservice d'intelligence artificielle OpenAI",
   "main": "index.js",
   "scripts": {
-"start": "node index.js",
-    "dev": "nodemon index.js", 
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "jest --coverage --detectOpenHandles --forceExit",
-    "test:watch": "jest --watch",
-    "project:status": "echo 'AI-Service - Sprint 3/4 - 85% complete'",
-    "demo": "echo 'Demo: curl -H \"Authorization: Bearer valid-token\" http://localhost:5003/api/ai/ask -d {\"prompt\":\"roadtrip France 7 jours\"}'"
+    "test:watch": "jest --watch"
   },
   "keywords": [],
-  "author": "",
+  "author": "Inès GERVAIS",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
@@ -20,8 +18,6 @@
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "express-rate-limit": "^7.5.0",
-    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "node-cache": "^5.1.2",
     "openai": "^4.95.1",

@@ -6,18 +6,11 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest --coverage --watchAll=false --forceExit",
-    "test:watch": "jest --watch",
-    "health:check": "curl -f http://localhost:5001/health || exit 1"
+    "test": "jest --coverage --detectOpenHandles --forceExit",
+    "test:watch": "jest --watch"
   },
-  "keywords": [
-    "auth",
-    "oauth2",
-    "jwt",
-    "microservice",
-    "mvp"
-  ],
-  "author": "Votre Nom",
+  "keywords": [],
+  "author": "Inès GERVAIS",
   "license": "ISC",
   "dependencies": {
     "axios": "^1.8.4",
