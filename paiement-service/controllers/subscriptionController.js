@@ -69,31 +69,6 @@ class subscriptionController {
           userId
         );
 
-      try {
-        const User = require("../models/User");
-        const user = await User.findById(userId);
-
-        if (user && user.email) {
-          const NotificationService = require("../services/notificationService");
-          await NotificationService.sendSubscriptionCancelScheduled(
-            user.email,
-            {
-              plan: result.plan,
-              endDate: result.endDate,
-              daysRemaining: result.daysRemaining,
-            }
-          );
-          logger.info(
-            `[📧] Notification d'annulation programmée envoyée à ${user.email}`
-          );
-        }
-      } catch (notificationError) {
-        logger.warn(
-          "⚠️ Erreur envoi notification annulation:",
-          notificationError.message
-        );
-      }
-
       res.json({
         success: true,
         subscription: result,
