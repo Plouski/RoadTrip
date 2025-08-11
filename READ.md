@@ -12,10 +12,10 @@ Data Service :
 Metric Service : ok (sauf readme)
 Front Service :
 
-reinitialiser le token pour le role premium apres avoir payé l'abonnement
+améliorer les favoris
 
-mettre le message d'erreur pour dire que l'ia peut faire 2 semaines maximum
+améliorer les budgets
 
-data-service : pas recu l'email du nouveau utilisateur qui vient de s'inscrire (OK)
+créer une page de contact
 
-améliorer le PDF : OK
+empecher d'aller dans accueil quand on est authentifier
