@@ -76,18 +76,6 @@ npm test
 npm run test:watch
 ```
 
-## Architecture
-
-```
-auth-service/
-├── config/          # Configuration JWT + Passport
-├── controllers/     # Logique OAuth
-├── services/        # Communication data-service
-├── routes/          # Routes OAuth
-├── utils/           # Logger + helpers
-└── tests/          # Tests automatisés
-```
-
 ## Stack technique
 
 - **Node.js** + Express
