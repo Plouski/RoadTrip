@@ -4,9 +4,9 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "start": "node src/app.js",
+    "start": "node src/server.js",
     "test": "jest --coverage --detectOpenHandles --forceExit",
-    "dev": "nodemon src/app.js",
+    "dev": "nodemon src/server.js",
     "test:watch": "jest --watch"
   },
   "repository": {
