@@ -1,6 +1,5 @@
 require("dotenv").config();
 
-// Configuration spéciale pour les tests
 if (process.env.NODE_ENV === 'test') {
   process.env.ENABLE_FILE_LOGGING = 'false';
   process.env.LOG_LEVEL = 'error';
@@ -574,5 +573,4 @@ if (process.env.NODE_ENV === 'production') {
   }, 24 * 60 * 60 * 1000);
 }
 
-// Export pour les tests - toujours exporter l'app même si les serveurs ne démarrent pas
 module.exports = process.env.NODE_ENV === 'test' ? app : { app, server, metricsServer };

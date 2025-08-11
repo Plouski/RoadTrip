@@ -9,8 +9,6 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
-
-  # ✅ CONFIGURATION DOCKER - Utilise les noms des containers
   
   # Service AI
   - job_name: 'ai-service'

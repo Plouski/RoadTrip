@@ -3,13 +3,11 @@
 ai-service : ok
 auth-service : ok
 data-service :
-metrics-service : ok
-notification-service : ok
-paiement-service : ok
+metrics-service :
+notification-service :
+paiement-service :
 front-service :
 
-améliorer export pdf : OK
+créer une page de contact (front)
 
-créer une page de contact
-
-améliorer le budget dans explorer et favoris
+améliorer le budget dans explorer et favoris (front)
