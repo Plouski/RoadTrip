@@ -16,7 +16,6 @@ ingester:
   chunk_target_size: 1048576
   chunk_retain_period: 1m
   flush_op_timeout: 10s
-  # Configuration WAL avec chemin accessible
   wal:
     dir: /loki/wal
     checkpoint_duration: 5m
@@ -40,7 +39,6 @@ storage_config:
   filesystem:
     directory: /loki/data/chunks
 
-# Configuration compactor avec chemin correct
 compactor:
   working_directory: /loki/compactor
   shared_store: filesystem

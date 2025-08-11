@@ -1,119 +1,111 @@
-# Auth Service OAuth
+# Auth Service - OAuth Authentication
 
-🎓 **Projet conforme RNCP39583 "Expert en développement logiciel"**
+> Service d'authentification OAuth pour connexions Google et Facebook
 
-## 🚀 Démarrage rapide
+## Démarrage rapide
 
 ```bash
 # Installation
 npm install
 
-# Configuration
-cp .env.example .env
-# Remplir les variables OAuth dans .env
+# Variables d'environnement (créer .env)
+SERVICE_NAME=auth-service
+PORT=5001
+NODE_ENV=development
+LOG_LEVEL=debug
+ENABLE_FILE_LOGGING=true
+DATA_SERVICE_URL=http://localhost:5002
+MONGODB_URI=
+JWT_SECRET=your-secret
+JWT_EXPIRES_IN=1h
+JWT_REFRESH_EXPIRES_IN=7d
+SESSION_SECRET=une_chaine_super_secrete
+CORS_ORIGIN=http://localhost:3000,http://localhost:3000
+FRONTEND_URL=http://localhost:3000
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_CALLBACK_URL=
+FACEBOOK_CLIENT_ID=
+FACEBOOK_CLIENT_SECRET=
+FACEBOOK_CALLBACK_URL=
 
-# Démarrage
+# Lancement
 npm run dev
-
-# Tests
-npm test
 ```
 
-## 🔧 Configuration OAuth
+## API Endpoints
 
-### Google OAuth
-1. [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials
-2. Créer OAuth 2.0 Client ID
-3. Redirect URI: `http://localhost:5001/auth/oauth/google/callback`
+### OAuth Authentication
 
-### Facebook OAuth  
-1. [Facebook Developers](https://developers.facebook.com/) → Créer une app
-2. Facebook Login → Paramètres
-3. Valid OAuth Redirect URIs: `http://localhost:5001/auth/oauth/facebook/callback`
+| Endpoint | Méthode | Description |
+|----------|---------|-------------|
+| `/auth/oauth/google` | GET | Connexion Google OAuth |
+| `/auth/oauth/facebook` | GET | Connexion Facebook OAuth |
+| `/auth/logout` | POST | Déconnexion utilisateur |
+| `/providers` | GET | Info providers disponibles |
 
-## 📊 Endpoints
+### Monitoring
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /auth/oauth/google` | Connexion Google |
-| `GET /auth/oauth/facebook` | Connexion Facebook |
-| `GET /health` | Status + métriques |
-| `GET /docs` | Documentation API |
-| `GET /metrics` | Monitoring détaillé |
+| `/health` | Status du service |
+| `/metrics` | Métriques Prometheus |
+| `/vitals` | Informations système |
+| `/ping` | Test de réponse |
 
-## 🛡️ Sécurité OWASP
+## Configuration OAuth
 
-- ✅ **A01** - Rate limiting (100 req/15min)
-- ✅ **A02** - JWT sécurisé + HTTPS
-- ✅ **A03** - Validation des entrées
-- ✅ **A05** - Headers sécurisés (Helmet)
-- ✅ **A07** - OAuth 2.0 + OpenID Connect
-- ✅ **A09** - Logging sécuritaire
+### Google OAuth
+1. [Google Cloud Console](https://console.cloud.google.com/)
+2. APIs & Services → Credentials
+3. OAuth 2.0 Client ID
+4. Redirect URI: `http://localhost:5001/auth/oauth/google/callback`
 
-## 🧪 Tests (Bloc 2 RNCP)
+### Facebook OAuth
+1. [Facebook Developers](https://developers.facebook.com/)
+2. Créer une app → Facebook Login
+3. Valid OAuth Redirect URIs: `http://localhost:5001/auth/oauth/facebook/callback`
+
+## Tests
 
 ```bash
+# Lancer les tests
 npm test
+
+# Mode watch
+npm run test:watch
 ```
 
-Couvre :
-- Health checks
-- OAuth redirections  
-- JWT génération/validation
-- API endpoints
+## Stack technique
 
-## 📈 Monitoring (Bloc 4 RNCP)
+- **Node.js** + Express
+- **Passport.js** (OAuth Google/Facebook)
+- **JWT** pour les tokens
+- **Helmet** + Rate limiting (sécurité)
+- **Prometheus** pour les métriques
+- **Winston** pour les logs
+- **Jest** pour les tests
 
-**Métriques surveillées :**
-- Nombre de requêtes
-- Taux d'erreur
-- Succès/échecs OAuth
-- Performance
+## Monitoring
 
-**Alertes :** Taux d'erreur > 5%, problèmes OAuth
+- **Métriques** : `http://localhost:5001/metrics`
+- **Health check** : `http://localhost:5001/health`
+- **Logs** : Fichiers dans `../logs/auth-service/`
 
-## 🏗️ Architecture
+## Sécurité
+
+- **OAuth 2.0** + OpenID Connect
+- **Rate limiting** (200 req/15min général, 10 req/15min OAuth)
+- **Headers sécurisés** (Helmet + CSP)
+- **Sessions sécurisées** (HttpOnly, Secure)
+- **CORS** configuré
+
+## Flux OAuth
 
 ```
-Frontend → Auth Service → OAuth Providers (Google/Facebook)
-              ↓
-           MongoDB (Users)
+1. GET /auth/oauth/google → Redirection Google
+2. Utilisateur s'authentifie
+3. Google callback → /auth/oauth/google/callback
+4. Génération JWT tokens
+5. Redirection frontend avec token
 ```
-
-**Technologies :**
-- Node.js + Express
-- Passport.js (OAuth)
-- JWT (tokens)
-- MongoDB (stockage)
-- Helmet + Rate limiting (sécurité)
-
-## 🎯 Conformité RNCP39583
-
-| Bloc | Critère | Implementation |
-|------|---------|----------------|
-| **Bloc 1** | Cadrage projet | Architecture OAuth documentée |
-| **Bloc 2** | Développement sécurisé | OWASP + Tests unitaires |
-| **Bloc 3** | Pilotage | Health checks + Métriques |
-| **Bloc 4** | Maintenance | Monitoring + Supervision |
-
-## 🔄 Déploiement
-
-```bash
-# Production
-NODE_ENV=production npm start
-
-# Docker
-docker build -t auth-service .
-docker run -p 5001:5001 --env-file .env auth-service
-```
-
-## 📝 Cahier de recettes
-
-✅ Connexion Google OAuth fonctionnelle  
-✅ Connexion Facebook OAuth fonctionnelle  
-✅ Génération JWT sécurisée  
-✅ Rate limiting actif  
-✅ Headers de sécurité présents  
-✅ Monitoring temps réel  
-✅ Tests unitaires passent  
-✅ Documentation complète  
