@@ -53,19 +53,6 @@ npm test
 npm run test:watch
 ```
 
-## Architecture
-
-```
-ai-service/
-├── config/          # Configuration JWT
-├── controllers/     # Logique API
-├── middlewares/     # Auth & validation
-├── routes/          # Routes
-├── services/        # Intégration OpenAI
-├── test/            # Tests automatisés
-├── utils/           # Helpers
-```
-
 ## Stack technique
 
 - **Node.js** + Express

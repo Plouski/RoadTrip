@@ -1,4 +1,4 @@
-# 💳 Paiement Service - ROADTRIP
+# Paiement Service - ROADTRIP
 
 > Service de gestion des abonnements premium avec intégration Stripe pour l'écosystème ROADTRIP
 
@@ -16,7 +16,7 @@ Le **Paiement Service** gère tous les aspects des abonnements premium de RoadTr
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      PAIEMENT SERVICE                          │
+│                      PAIEMENT SERVICE                           │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
@@ -307,7 +307,7 @@ docker build -t paiement-service .
 docker run -p 5004:5004 -p 9004:9004 \
   -e MONGODB_URI=mongodb://host.docker.internal:27017/roadtrip \
   -e STRIPE_SECRET_KEY=sk_test_... \
-  roadtrip-paiement
+  paiement-service
 ```
 
 ### Docker Compose
@@ -381,7 +381,7 @@ services:
 - `429` - Rate limit dépassé
 - `500` - Erreur serveur
 
-## 📈 Business Logic
+## Business Logic
 
 ### Plans disponibles
 - **Monthly**: 5€/mois
@@ -391,7 +391,7 @@ services:
 - Itinéraires illimités
 - IA de recommandation avancée
 
-## 🔄 Intégrations
+## Intégrations
 
 ### Services externes
 - **Stripe** - Paiements et abonnements
