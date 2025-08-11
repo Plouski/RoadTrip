@@ -104,11 +104,6 @@ jobs:
           if [ "${{ needs.deploy.result }}" == "success" ]; then
             echo "🎉 RoadTrip! déployé avec succès!"
             echo "✅ Tous les services sont prêts"
-            echo ""
-            echo "📊 Blocs RNCP validés:"
-            echo "  - C2.2.2: Tests unitaires ✅"
-            echo "  - C2.1.2: Intégration continue ✅"
-            echo "  - C2.2.4: Déploiement continu ✅"
           else
             echo "❌ Problème avec le déploiement"
             echo "🔍 Vérifiez les logs"
