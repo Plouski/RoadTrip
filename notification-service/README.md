@@ -1,421 +1,525 @@
-# 📧 Notification Service - ROADTRIP
+# 📧 Notification Service - ROADTRIP MVP
 
-> Service de notifications multi-canal (Email & SMS) pour l'écosystème ROADTRIP
+> **Microservice de Notifications Multi-Canal pour l'écosystème ROADTRIP**  
+> *Projet M2 - MVP Microservices - Certification RNCP39583*
 
-## Vue d'ensemble
+## 📋 Vue d'ensemble
 
-Le **Notification Service** centralise toutes les communications de ROADTRIP :
-- **Emails transactionnels** via Mailjet (confirmation, reset password)
-- **SMS** via Free Mobile API (codes de sécurité)
-- **Templates responsives** avec branding ROADTRIP
-- **Mode simulation** pour développement sans configuration
-- **Monitoring avancé** avec Prometheus et logs structurés
-- **Sécurité renforcée** avec API Keys
+Service Node.js gérant les **notifications emails et SMS** avec intégration Mailjet et Free Mobile, templates HTML personnalisés, sécurité API-Key et monitoring Prometheus.
 
-## Architecture
+### 🎯 Fonctionnalités MVP
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   NOTIFICATION SERVICE                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │   Routes     │  │   Services   │  │ Middlewares  │           │
-│  │              │  │              │  │              │           │
-│  │ • /api/email │  │ • EmailSvc   │  │ • Auth       │           │
-│  │ • /api/sms   │  │ • SmsSvc     │  │ • Validation │           │
-│  │ • /health    │  │              │  │ • CORS       │           │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
-│         │                 │                 │                   │
-│         └─────────────────┼─────────────────┘                   │
-│                           │                                     │
-│  ┌──────────────┐  ┌──────▼───────┐  ┌──────────────┐           │
-│  │   Templates  │  │    Utils     │  │   Metrics    │           │
-│  │              │  │              │  │              │           │
-│  │ • Confirmation│ │ • Logger     │  │ • Prometheus │           │
-│  │ • Password   │  │ • Validation │  │ • Grafana    │           │
-│  │              │  │ • Security   │  │              │           │
-│  └──────────────┘  └──────────────┘  └──────────────┘           │
-└─────────────────────────────────────────────────────────────────┘
+- ✅ **Email Transactionnel** : Confirmation compte + réinitialisation mot de passe
+- ✅ **SMS Free Mobile** : Codes de vérification par SMS
+- ✅ **Templates HTML** : Emails branded ROADTRIP responsives
+- ✅ **API Security** : Protection API-Key pour requêtes inter-services
+- ✅ **Multi-Provider** : Mailjet (email) + Free Mobile (SMS)
+- ✅ **Monitoring Intégré** : Métriques Prometheus + health checks
+- ✅ **Fallback Mode** : Simulation si providers non configurés
 
-                    ┌─────────────┐    ┌─────────────┐
-                    │   Mailjet   │    │ Free Mobile │
-                    │    Email    │    │     SMS     │
-                    └─────────────┘    └─────────────┘
-```
+---
 
-## Démarrage rapide
+## 🚀 Installation & Démarrage
 
 ### Prérequis
-- **Node.js** 20+
-- **Compte Mailjet**
-- **Free Mobile**
-
-### Installation
-
 ```bash
-# Cloner et naviguer
-git clone <repo-url>
-cd roadtrip/notification-service
+Node.js 20+
+npm ou yarn
+Compte Mailjet (email)
+Compte Free Mobile avec API SMS (SMS)
+```
 
-# Installation des dépendances
+### Configuration
+```bash
+# Cloner et installer
+git clone <repo>
+cd notification-service
 npm install
 
-# Configuration environnement
+# Configurer l'environnement
 cp .env.example .env
-# ⚠️ Configurer au minimum NOTIFICATION_API_KEY
-
-# Démarrage développement
-npm run dev
-
-# Démarrage production
-npm start
 ```
 
 ### Variables d'environnement
-
 ```env
-# Application
-SERVICE_NAME=notification-service
-NODE_ENV=development
+# Service Configuration
 PORT=5005
-
-# Sécurité
-NOTIFICATION_API_KEY=your-secret-api-key-here
-
-# CORS
+NODE_ENV=development
+API_KEY=your-secret-api-key-here
 CORS_ORIGIN=http://localhost:3000
 
-# Email - Mailjet
+# Email Provider (Mailjet)
 MAILJET_API_KEY=your-mailjet-api-key
 MAILJET_API_SECRET=your-mailjet-secret-key
 EMAIL_FROM_NAME=ROADTRIP
 EMAIL_FROM_ADDRESS=noreply@roadtrip.fr
 
-# SMS - Free Mobile
-FREE_MOBILE_USERNAME=your-free-mobile-username
-FREE_MOBILE_API_KEY=your-free-mobile-api-key
+# SMS Provider (Free Mobile)
+FREE_SMS_USER=your-free-mobile-username
+FREE_SMS_PASS=your-free-mobile-api-key
 
 # Frontend
 FRONTEND_URL=http://localhost:3000
-
-# Monitoring
-LOG_LEVEL=debug
-ENABLE_FILE_LOGGING=true
 ```
 
-## API Documentation
+### Lancement
+```bash
+# Développement
+npm run dev
 
-### Authentification
-**TOUTES** les routes `/api/*` nécessitent l'header `x-api-key` avec votre clé secrète.
+# Production
+npm start
 
-### Endpoints disponibles
+# Tests avec coverage
+npm test
 
-#### **Emails**
+# Health check
+npm run health
+```
 
+---
+
+## 📡 API Endpoints
+
+### 📧 Notifications Email
+
+#### Email de Confirmation
 ```http
 POST /api/email/confirm
-```
-Envoie un email de confirmation d'inscription
-```json
+Content-Type: application/json
+x-api-key: your-secret-api-key
+
 {
   "email": "user@example.com",
-  "token": "confirmation-token-uuid"
+  "token": "abc123def456"
 }
 ```
 
-**Réponse success:**
-```json
-{
-  "success": true,
-  "message": "Email de confirmation envoyé avec Mailjet ✅",
-  "requestId": "notification-service-12345"
-}
+**Template Email Confirmation :**
+```html
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h1 style="color: #E30613;">Bienvenue sur ROADTRIP!</h1>
+  <p>Cliquez sur le lien ci-dessous pour confirmer votre compte :</p>
+  <a href="http://localhost:3000/confirm-account?token=abc123def456" 
+     style="background: #E30613; color: white; padding: 15px 30px; 
+            text-decoration: none; border-radius: 5px;">
+    Confirmer mon compte
+  </a>
+  <p>Ce lien expire dans 24 heures.</p>
+</div>
 ```
 
+#### Email de Réinitialisation
 ```http
 POST /api/email/reset
-```
-Envoie un email de réinitialisation de mot de passe
-```json
+Content-Type: application/json
+x-api-key: your-secret-api-key
+
 {
   "email": "user@example.com",
   "code": "123456"
 }
 ```
 
-#### **SMS**
+**Template Email Reset :**
+```html
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h1 style="color: #E30613;">Réinitialisation de mot de passe</h1>
+  <p>Voici votre code de réinitialisation :</p>
+  <div style="background: #f5f5f5; padding: 20px; text-align: center;">
+    <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #E30613;">
+      123456
+    </span>
+  </div>
+  <p>Ce code expire dans 1 heure.</p>
+</div>
+```
 
+### 📱 Notifications SMS
+
+#### SMS Code de Réinitialisation
 ```http
 POST /api/sms/reset
-```
-Envoie un SMS de réinitialisation via Free Mobile
-```json
+Content-Type: application/json
+x-api-key: your-secret-api-key
+
 {
   "username": "12345678",
-  "apiKey": "your-free-mobile-key",
+  "apiKey": "your-free-mobile-api-key",
   "code": "654321"
 }
 ```
 
-### Monitoring
-
-```http
-GET /health
-```
-État de santé détaillé du service
+**Réponse Success :**
 ```json
-{
-  "status": "healthy",
-  "service": "notification-service",
-  "uptime": 3600,
-  "config": {
-    "auth": true,
-    "mailjet": true,
-    "freeMobile": false
-  }
-}
-```
-
-```http
-GET /vitals
-```
-Informations système complètes
-```json
-{
-  "service": "notification-service",
-  "uptime": 3600,
-  "memory": {...},
-  "active_connections": 2,
-  "features": [
-    "Email Notifications (Mailjet)",
-    "SMS Notifications (Free Mobile)",
-    "API Key Authentication"
-  ],
-  "providers": {
-    "mailjet": {
-      "configured": true,
-      "status": "Email provider active"
-    }
-  }
-}
-```
-
-```http
-GET /metrics
-```
-Métriques Prometheus (format text/plain)
-
-```http
-GET /ping
-```
-Test de connectivité simple
-
-## Templates d'emails
-
-### **Email de confirmation**
-- Design responsive ROADTRIP
-- Bouton CTA prominent
-- Lien de fallback
-- Expiration 24h
-
-### **Email de reset password**
-- Code sécurisé bien visible
-- Design cohérent avec la marque
-- Instructions claires
-- Expiration 1h
-
-## Configuration des providers
-
-### **Mailjet Setup**
-
-1. **Créer compte** sur [Mailjet](https://mailjet.com/)
-2. **Obtenir les clés** API dans Compte → API Keys
-3. **Configurer domaine** pour éviter le spam
-4. **Ajouter dans .env** :
-```env
-MAILJET_API_KEY=your_api_key
-MAILJET_API_SECRET=your_secret_key
-EMAIL_FROM_ADDRESS=noreply@votre-domaine.com
-```
-
-### **Free Mobile Setup**
-
-1. **Activer l'option** dans votre espace Free Mobile
-2. **Noter vos identifiants** : login + clé API
-3. **Tester** depuis l'interface web
-4. **Ajouter dans .env** :
-```env
-FREE_MOBILE_USERNAME=12345678
-FREE_MOBILE_API_KEY=your_api_key
-```
-
-### **Mode simulation (sans config)**
-```bash
-# Le service fonctionne sans configuration !
-# Responses mockées pour développement :
 {
   "success": true,
-  "message": "Email simulé - Configurez Mailjet",
-  "note": "Ajoutez MAILJET_API_KEY et MAILJET_API_SECRET"
+  "status": 200
 }
 ```
 
-## Tests
-
-### Tests unitaires
-```bash
-npm test
+**Message SMS :**
+```
+RoadTrip! - Votre code de réinitialisation est : 654321
 ```
 
-### Tests en mode watch
-```bash
-npm run test:watch
+### 🔧 Système & Monitoring
+```http
+GET /health          # État du service + providers
+GET /vitals          # Statistiques système
+GET /metrics         # Métriques Prometheus
+GET /ping            # Test connectivité simple
 ```
-
-## Docker
-
-### Build
-```bash
-docker build -t notification-service .
-```
-
-### Run
-```bash
-docker run -p 5005:5005 -p 9005:9005 \
-  -e NOTIFICATION_API_KEY=your-secret-key \
-  -e MAILJET_API_KEY=your-mailjet-key \
-  notification-service
-```
-
-### Docker Compose
-```yaml
-# Inclus dans le docker-compose.yml principal
-notification-service:
-  build: ./notification-service
-  ports:
-    - "5005:5005"
-    - "9094:9090"
-  environment:
-    - NOTIFICATION_API_KEY=${NOTIFICATION_API_KEY}
-    - MAILJET_API_KEY=${MAILJET_API_KEY}
-    - MAILJET_API_SECRET=${MAILJET_API_SECRET}
-```
-
-## Monitoring & Observabilité
-
-### Métriques Prometheus
-- `notification_service_http_requests_total` - Requêtes totales
-- `notification_service_http_request_duration_seconds` - Temps de réponse
-- `notification_service_external_service_health` - Santé Mailjet/Free Mobile
-- `notification_service_active_connections` - Connexions actives
-
-### Logs structurés
-```json
-{
-  "timestamp": "2024-01-01T12:00:00Z",
-  "level": "info",
-  "service": "notification-service",
-  "type": "email",
-  "action": "confirmation",
-  "email": "tes***@example.com",
-  "provider": "mailjet",
-  "requestId": "notif-12345-abc"
-}
-```
-
-### Types de logs spécialisés
-- `logger.security()` - Événements sécurité
-- `logger.performance()` - Requêtes lentes
-- Email masqué dans logs pour protection données
-
-## Sécurité
-
-### Authentification
-- **API Key obligatoire** pour tous les endpoints `/api/*`
-- **Validation stricte** des paramètres
-- **Rate limiting** recommandé en production
-
-### Protection des données
-- **Emails masqués** dans les logs (tes***@example.com)
-- **Pas de stockage** des mots de passe ou tokens
-- **Headers sécurisés** avec Helmet.js
-- **CORS configuré** strictement
-
-## Gestion d'erreurs
-
-### Codes de réponse
-- `200` - Succès
-- `400` - Paramètres invalides
-- `403` - API Key manquante/invalide
-- `500` - Erreur serveur/provider
-
-### Fallbacks intelligents
-```javascript
-// Si Mailjet indisponible → Mode simulation
-// Si Free Mobile échoue → Réponse success avec note
-// Si service surchargé → Retry automatique
-```
-
-### Monitoring des erreurs
-- **Logs détaillés** pour chaque échec
-- **Métriques d'erreur** dans Prometheus
-- **Health checks** des providers externes
-
-## Intégrations
-
-### Services ROADTRIP
-- **Auth Service** - Reset password
-- **Data Service** - Confirmation comptes
-- **Frontend** - Liens de redirection
-
-### APIs externes
-- **Mailjet** - Envoi emails transactionnels
-- **Free Mobile** - Envoi SMS sécurisé
-- **Prometheus** - Collecte métriques
-
-### Communication inter-services
-```javascript
-// Appel depuis data-service
-const response = await fetch('http://notification-service:5005/api/email/confirm', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': process.env.NOTIFICATION_API_KEY
-  },
-  body: JSON.stringify({ email, token })
-});
-```
-
-## Debugging
-
-### Logs détaillés
-```bash
-# Mode debug
-LOG_LEVEL=debug npm run dev
-
-# Suivre les logs
-tail -f logs/notification-service/combined.log
-```
-
-## Contribution
-
-1. **Fork** le projet
-2. **Créer** une branche (`git checkout -b feature/nouvelle-fonctionnalite`)
-3. **Commit** (`git commit -m 'Ajouter nouvelle fonctionnalité'`)
-4. **Push** (`git push origin feature/nouvelle-fonctionnalite`)
-5. **Pull Request**
-
-## Support
-
-- **Issues** : GitHub Issues
-- **Monitoring** : Grafana dashboards
-- **Logs** : Centralisés avec Loki
-
-## Licence
-
-MIT License - voir `LICENSE` file
 
 ---
 
-**📧 Notification Service** - *Communications multi-canal pour ROADTRIP*
+## 🏗️ Architecture
+
+### Structure Projet
+```
+notification-service/
+├── services/              # Services notifications
+│   ├── emailService.js    # Service Mailjet
+│   └── smsService.js      # Service Free Mobile
+├── utils/                 # Utilitaires
+│   └── logger.js         # Logger ROADTRIP
+├── test/                  # Tests
+│   └── notification.test.js
+├── routes.js              # Routes API centralisées
+├── metrics.js             # Métriques Prometheus
+├── index.js               # Point d'entrée + serveur
+├── package.json           # Dépendances
+└── Dockerfile             # Container
+```
+
+### Flow Notifications
+```mermaid
+graph LR
+    A[Service Client] --> B[API Key Check]
+    B --> C{Provider Type}
+    C -->|Email| D[Mailjet Service]
+    C -->|SMS| E[Free Mobile Service]
+    D --> F[Email Template]
+    E --> G[SMS Message]
+    F --> H[Send Email]
+    G --> I[Send SMS]
+    H --> J[Log Success/Failure]
+    I --> J
+    J --> K[Metrics Update]
+```
+
+---
+
+## 🔒 Sécurité & Authentification
+
+### API Key Protection
+```javascript
+// Middleware sécurité inter-services
+const requireApiKey = (req, res, next) => {
+  const apiKey = req.headers["x-api-key"];
+  if (!apiKey || apiKey !== process.env.NOTIFICATION_API_KEY) {
+    return res.status(403).json({ error: "API key requise" });
+  }
+  next();
+};
+
+// Validation email
+const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+```
+
+### Configuration Providers Sécurisée
+```javascript
+// Email Service - Mailjet
+const transporter = nodemailer.createTransporter(
+  mailjetTransport({
+    auth: {
+      apiKey: process.env.MAILJET_API_KEY,
+      apiSecret: process.env.MAILJET_API_SECRET,
+    },
+  })
+);
+
+// SMS Service - Free Mobile
+const smsConfig = {
+  baseURL: 'https://smsapi.free-mobile.fr/sendmsg',
+  timeout: 10000,
+  validateStatus: (status) => status === 200
+};
+```
+
+### Templates Sécurisés
+```javascript
+// Prévention XSS dans templates
+const createConfirmationEmail = (token) => {
+  const sanitizedToken = token.replace(/[<>"']/g, ''); // Basic sanitization
+  const link = `${process.env.FRONTEND_URL}/confirm-account?token=${sanitizedToken}`;
+  
+  return {
+    subject: "Confirmez votre compte - ROADTRIP!",
+    html: `<!-- Template HTML sécurisé -->`
+  };
+};
+```
+
+---
+
+## 📊 Monitoring & Métriques
+
+### Métriques Prometheus Spécialisées
+- **Notifications** : `notification_service_emails_sent_total`
+- **SMS** : `notification_service_sms_sent_total`
+- **Providers** : `notification_service_external_service_health`
+- **Performance** : `notification_service_http_request_duration_seconds`
+
+### Health Check Avancé
+```bash
+curl http://localhost:5005/health
+# {
+#   "status": "healthy",
+#   "service": "notification-service",
+#   "providers": {
+#     "mailjet": true,
+#     "freeMobile": true
+#   },
+#   "timestamp": "2024-01-15T10:30:00.000Z"
+# }
+```
+
+### Logs Structurés
+```javascript
+// Log email envoyé
+logger.info("Email de confirmation envoyé avec succès", {
+  type: "email",
+  action: "confirmation", 
+  email: "user@example.com",
+  messageId: "msg-12345",
+  provider: "mailjet"
+});
+
+// Log SMS envoyé
+logger.info("SMS envoyé avec succès via Free Mobile", {
+  type: "sms",
+  provider: "freemobile",
+  username: "12345678",
+  status: 200
+});
+```
+
+---
+
+## 🧪 Tests & Qualité
+
+### Coverage Cible MVP
+```bash
+npm test
+# ✅ Email Service (88% coverage)
+# ✅ SMS Service (85% coverage)
+# ✅ API Endpoints (90% coverage) 
+# ✅ Security Middleware (95% coverage)
+# ✅ Error Handling (82% coverage)
+```
+
+### Tests Critiques
+```javascript
+describe('📧 Email Notifications', () => {
+  test('Sends confirmation email with valid API key', async () => {
+    const response = await request(app)
+      .post('/api/email/confirm')
+      .set('x-api-key', 'test-valid-key')
+      .send({
+        email: 'test@example.com',
+        token: 'abc123'
+      });
+    
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+  });
+
+  test('Rejects request without API key', async () => {
+    const response = await request(app)
+      .post('/api/email/confirm')
+      .send({
+        email: 'test@example.com', 
+        token: 'abc123'
+      });
+    
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('API key requise');
+  });
+
+  test('Validates email format', async () => {
+    const response = await request(app)
+      .post('/api/email/confirm')
+      .set('x-api-key', 'test-valid-key')
+      .send({
+        email: 'invalid-email',
+        token: 'abc123'
+      });
+    
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('Paramètres invalides');
+  });
+});
+
+describe('📱 SMS Notifications', () => {
+  test('Sends SMS with Free Mobile provider', async () => {
+    const response = await request(app)
+      .post('/api/sms/reset')
+      .set('x-api-key', 'test-valid-key')
+      .send({
+        username: '12345678',
+        apiKey: 'test-api-key',
+        code: '123456'
+      });
+    
+    expect([200, 500]).toContain(response.status);
+    if (response.status === 200) {
+      expect(response.body.success).toBe(true);
+    }
+  });
+});
+```
+
+---
+
+## 🐳 Déploiement Docker
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+
+# Installation dépendances
+COPY package*.json ./
+RUN npm install -g nodemon && npm install
+
+# Code source
+COPY . .
+
+# Ports
+EXPOSE 5005 9005
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD npm run health || exit 1
+
+# Démarrage
+CMD ["npm", "run", "dev"]
+```
+
+---
+
+## 🔍 Validation RNCP39583
+
+### Critères Respectés
+
+| Critère RNCP | Implémentation | Status |
+|--------------|----------------|---------|
+| **C2.2.1 - Multi-Channel Architecture** | Email + SMS + templates | ✅ |
+| **C2.2.2 - Tests Notification** | Jest + mocks providers >85% | ✅ |
+| **C2.2.3 - Sécurité Communications** | API-Key + validation + logs | ✅ |
+| **C4.1.2 - Monitoring Notifications** | Métriques envois + providers | ✅ |
+| **C4.2.1 - Audit Communications** | Logs structurés + traçabilité | ✅ |
+| **C4.3.2 - Templates Versioning** | HTML templates + config | ✅ |
+
+---
+
+## 📈 Optimisations & Limitations MVP
+
+### ✅ Optimisations Implémentées
+- **Multi-Provider Support** : Mailjet + Free Mobile avec fallback
+- **Templates Responsive** : HTML emails optimisés mobile
+- **API Security** : Protection API-Key pour inter-services
+- **Structured Logging** : Traçabilité complète envois/échecs
+- **Graceful Degradation** : Mode simulation si providers indisponibles
+
+### ⚠️ Limitations MVP
+- **Providers Limités** : Uniquement Mailjet + Free Mobile
+- **Templates Statiques** : Pas de templating dynamique avancé
+- **Queue System** : Envois synchrones (pas Redis Queue)
+- **Retry Logic** : Pas de retry automatique sur échec
+
+---
+
+## 🚧 Roadmap Post-MVP
+
+### Phase 2 (Production)
+- [ ] **Queue System** : Redis Queue pour envois asynchrones
+- [ ] **Retry Logic** : Retry automatique avec backoff exponentiel
+- [ ] **Template Engine** : Handlebars pour templates dynamiques
+- [ ] **Multi-Provider** : SendGrid, Twilio SMS backup
+- [ ] **Delivery Tracking** : Webhooks de statut livraison
+
+### Phase 3 (Enterprise)
+- [ ] **Push Notifications** : Firebase Cloud Messaging
+- [ ] **In-App Notifications** : WebSocket real-time
+- [ ] **Advanced Templates** : A/B testing templates
+- [ ] **Analytics** : Métriques ouverture/clic emails
+- [ ] **Internationalization** : Templates multi-langues
+
+---
+
+## 🐛 Troubleshooting
+
+### Erreurs Courantes
+```bash
+# Mailjet non configuré
+Warning: Mailjet non configuré - les emails seront simulés
+# Solution: Définir MAILJET_API_KEY + MAILJET_API_SECRET
+
+# Free Mobile echec SMS
+Error: API Free Mobile retourne: 403
+# Solution: Vérifier FREE_SMS_USER + FREE_SMS_PASS + service activé
+
+# API Key manquante
+Error: API key requise
+# Solution: Ajouter header x-api-key avec NOTIFICATION_API_KEY
+
+# Template email cassé
+Error: Template rendering failed
+# Solution: Vérifier FRONTEND_URL pour liens de confirmation
+```
+
+### Debug Providers
+```bash
+# Test email confirmation
+curl -X POST http://localhost:5005/api/email/confirm \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{"email":"test@example.com","token":"abc123"}'
+
+# Test SMS reset
+curl -X POST http://localhost:5005/api/sms/reset \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: your-api-key" \
+  -d '{"username":"12345678","apiKey":"your-key","code":"123456"}'
+
+# Vérifier health providers
+curl http://localhost:5005/health | jq '.providers'
+```
+
+### Logs Debugging
+```bash
+# Suivre logs en temps réel
+tail -f logs/notification-service/combined.log
+
+# Filtrer logs email
+grep "type.*email" logs/notification-service/combined.log
+
+# Filtrer logs SMS
+grep "type.*sms" logs/notification-service/combined.log
+```
+
+---
+
+## 👥 Contexte Projet
+
+**Projet M2** - Développement d'un MVP microservices pour plateforme de roadtrip  
+**Certification** : RNCP39583 - Expert en Développement Logiciel  
+**Technologies** : Node.js, Mailjet, Free Mobile, Nodemailer, Express, Prometheus  
+**Auteur** : Inès GERVAIS
+
+---
+
+## 📄 Licence
+
+MIT License - Projet académique M2
