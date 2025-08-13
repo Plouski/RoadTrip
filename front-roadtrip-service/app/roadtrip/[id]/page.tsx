@@ -1,309 +1,292 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { getUserRole } from "@/lib/auth";
-import { RoadtripService } from "@/services/roadtrip-service";
-import { AuthService } from "@/services/auth-service";
-import { AdminService } from "@/services/admin-service";
-import LoginPromptModal from "@/components/ui/login-prompt-modal";
-import html2canvas from "html2canvas";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import jsPDF from "jspdf";
-import {
-  RoadTripHero,
-  RoadTripItinerary,
-  PremiumItineraryLocked,
-  PointsOfInterest,
-  RoadTripSidebar,
-} from "@/components/roadtrip-component";
-import { NotFoundMessage } from "@/components/ui/not-found-message";
+
+import RoadTripView from "@/components/roadtrip/RoadTripView";
+import LoginPromptModal from "@/components/ui/login-prompt-modal";
 import Loading from "@/components/ui/loading";
+import { NotFoundMessage } from "@/components/ui/not-found-message";
+
+import { AuthService } from "@/services/auth-service";
+import { RoadtripService } from "@/services/roadtrip-service";
+import { AdminService } from "@/services/admin-service";
+import { FavoriteService } from "@/services/favorites-service";
+import { getUserRole } from "@/lib/auth";
+
+type UserRole = "visitor" | "user" | "premium" | "admin";
+
+function isMongoId(v: unknown): v is string {
+  return typeof v === "string" && /^[0-9a-fA-F]{24}$/.test(v);
+}
+
+function makePdfFileName(title: string) {
+  const raw = (title || "roadtrip").toString();
+  return `${raw
+    .replace(/[^a-zA-Z0-9\s]/g, "")
+    .replace(/\s+/g, "-")
+    .toLowerCase()}-roadtrip.pdf`;
+}
 
 export default function RoadTripPage() {
   const router = useRouter();
   const params = useParams();
   const id = params?.id as string;
+
   const [roadTrip, setRoadTrip] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string>("visitor");
-  const [canAccessPremium, setCanAccessPremium] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [userRole, setUserRole] = useState<UserRole>("visitor");
+  const [canAccessPremium, setCanAccessPremium] = useState(false);
+  const [favorite, setFavorite] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [favorite, setFavorite] = useState<boolean>(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
-  // 🔥 DEBUG : Afficher les informations de debug
-  console.log("🔍 Debug RoadTripPage:", {
-    id,
-    type: typeof id,
-    params,
-    isValidId: id && /^[0-9a-fA-F]{24}$/.test(id),
-  });
-
   useEffect(() => {
-    // 🔥 CORRECTION CRITIQUE : Vérifier que l'ID existe ET est valide
-    if (!id) {
-      console.error("❌ Pas d'ID fourni");
-      setError("ID de roadtrip manquant");
-      setIsLoading(false);
-      return;
-    }
-
-    if (typeof id !== "string") {
-      console.error("❌ ID invalide (type):", typeof id);
-      setError("Format d'ID invalide");
-      setIsLoading(false);
-      return;
-    }
-
-    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
-      console.error("❌ ID invalide (format MongoDB):", id);
+    if (!isMongoId(id)) {
       setError("ID de roadtrip invalide");
       setIsLoading(false);
       return;
     }
 
-    const checkAuth = async () => {
-      const authStatus = await AuthService.checkAuthentication();
-      setIsAuthenticated(authStatus);
-    };
-
-    const loadRoadtrip = async () => {
+    (async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        console.log("🚀 Chargement du roadtrip avec ID:", id);
+        // 1) Auth
+        const authStatus = await AuthService.checkAuthentication();
+        setIsAuthenticated(authStatus);
 
-        const role = getUserRole() || "visitor";
+        const role = (getUserRole() || "user") as UserRole;
         setUserRole(role);
 
+        // 2) Trip
         const trip = await RoadtripService.getRoadtripById(id);
-        console.log("✅ Roadtrip chargé:", trip);
         setRoadTrip(trip);
 
-        try {
-          await RoadtripService.incrementViewCount(trip._id || id);
-        } catch (err) {
-          console.error("Erreur lors de l'enregistrement de la vue:", err);
+        // 3) Accès premium
+        setCanAccessPremium(
+          role === "admin" ||
+            role === "premium" ||
+            !!trip?.userAccess?.canAccessPremium
+        );
+
+        // 4) Favori
+        if (authStatus) {
+          try {
+            const data = await FavoriteService.getFavorites();
+            const list = Array.isArray(data?.roadtrips) ? data.roadtrips : [];
+            const tripId = trip?._id || id;
+            setFavorite(list.some((t: any) => (t?._id || t?.id) === tripId));
+          } catch {
+          }
         }
 
-        if (trip.userAccess) {
-          setCanAccessPremium(
-            trip.userAccess.canAccessPremium || role === "admin"
-          );
-          setFavorite(trip.userAccess.isFavorite || false);
-        } else {
-          setCanAccessPremium(role === "admin" || role === "premium");
-        }
-      } catch (error: any) {
-        console.error("❌ Erreur lors du chargement du roadtrip:", error);
-        setError(error.message || "Erreur lors du chargement des données");
+        // 5) compteur de vues
+        RoadtripService.incrementViewCount(trip?._id || id).catch(() => {});
+      } catch (e: any) {
+        setError(e?.message || "Erreur lors du chargement des données");
       } finally {
         setIsLoading(false);
       }
-    };
+    })();
+  }, [id]);
 
-    // 🔥 CORRECTION : Seulement exécuter si l'ID est valide
-    checkAuth();
-    loadRoadtrip();
-  }, [id]); // Dépendance sur id
+  const handleAddToFavorites = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isAuthenticated) return setShowLoginPrompt(true);
 
-  // Gestion des favoris
-  const handleAddToFavorites = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+      try {
+        setFavoriteLoading(true);
+        const res = await FavoriteService.toggleFavorite(roadTrip._id);
+        setFavorite(!!res.favorited);
+      } catch {
+      } finally {
+        setFavoriteLoading(false);
+      }
+    },
+    [isAuthenticated, roadTrip?._id]
+  );
 
-    if (!isAuthenticated) {
-      setShowLoginPrompt(true);
-      return;
-    }
-
-    setFavorite(!favorite);
-  };
-
-  // Suppression (pour admin)
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     const confirmed = confirm("Voulez-vous vraiment supprimer ce roadtrip ?");
     if (!confirmed) return;
 
     try {
       await AdminService.deleteRoadtrip(roadTrip._id);
       router.push("/");
-    } catch (error: any) {
-      alert(`Erreur lors de la suppression du roadtrip: ${error.message}`);
+    } catch (e: any) {
+      alert(
+        `Erreur lors de la suppression du roadtrip: ${e?.message || "inconnue"}`
+      );
     }
-  };
+  }, [roadTrip?._id, router]);
 
-  // Partage
-  const handleShare = () => {
+  const handleShare = useCallback(() => {
+    const payload = {
+      title: roadTrip?.title,
+      text: roadTrip?.description,
+      url: typeof window !== "undefined" ? window.location.href : "",
+    };
+
     if (navigator.share) {
-      navigator
-        .share({
-          title: roadTrip.title,
-          text: roadTrip.description,
-          url: window.location.href,
-        })
-        .catch(console.error);
+      navigator.share(payload as ShareData).catch(() => {});
     } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert("Lien copié dans le presse-papiers !");
+      navigator.clipboard.writeText(payload.url || "").then(() => {
+        alert("Lien copié dans le presse-papiers !");
+      });
     }
-  };
+  }, [roadTrip?.title, roadTrip?.description]);
 
-  // Génération PDF
-  const generatePdf = async () => {
+  const generatePdf = useCallback(() => {
     try {
+      if (!roadTrip) return;
+
       const pdf = new jsPDF("p", "mm", "a4");
       const pageWidth = pdf.internal.pageSize.getWidth();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
-      let currentY = margin;
+      let y = margin;
 
-      // 1. TITRE du road trip
+      // Titre
       pdf.setFontSize(20);
       pdf.setFont("helvetica", "bold");
+      const titleLines = pdf.splitTextToSize(
+        roadTrip.title || "",
+        contentWidth
+      );
+      pdf.text(titleLines, margin, y);
+      y += titleLines.length * 8 + 10;
 
-      // Gestion du texte long pour le titre
-      const titleLines = pdf.splitTextToSize(roadTrip.title, contentWidth);
-      pdf.text(titleLines, margin, currentY);
-      currentY += titleLines.length * 8 + 10;
-
-      // Informations de base
+      // Infos
       pdf.setFontSize(12);
       pdf.setFont("helvetica", "normal");
-      const info = `${roadTrip.country}${
+      const info = `${roadTrip.country || ""}${
         roadTrip.region ? ` • ${roadTrip.region}` : ""
-      } • ${roadTrip.duration} jours`;
-      pdf.text(info, margin, currentY);
-      currentY += 15;
+      } • ${roadTrip.duration || 0} jours`;
+      pdf.text(info, margin, y);
+      y += 15;
 
-      // 2. POINTS D'INTÉRÊT
-      if (roadTrip.pointsOfInterest?.length > 0) {
-        // Vérifier si on a assez de place, sinon nouvelle page
-        if (currentY > 250) {
+      // Points d’intérêt
+      const pois = Array.isArray(roadTrip.pointsOfInterest)
+        ? roadTrip.pointsOfInterest
+        : [];
+      if (pois.length > 0) {
+        if (y > 250) {
           pdf.addPage();
-          currentY = margin;
+          y = margin;
         }
-
         pdf.setFontSize(16);
         pdf.setFont("helvetica", "bold");
-        pdf.text("Points d'intérêt", margin, currentY);
-        currentY += 10;
+        pdf.text("Points d'intérêt", margin, y);
+        y += 10;
 
         pdf.setFontSize(11);
         pdf.setFont("helvetica", "normal");
 
-        roadTrip.pointsOfInterest.forEach((poi, index) => {
-          // Vérifier l'espace restant
-          if (currentY > 260) {
+        pois.forEach((poi: any, i: number) => {
+          if (y > 260) {
             pdf.addPage();
-            currentY = margin;
+            y = margin;
           }
-
-          // Nom du POI
           pdf.setFont("helvetica", "bold");
-          pdf.text(`${index + 1}. ${poi.name}`, margin, currentY);
-          currentY += 6;
+          pdf.text(`${i + 1}. ${poi?.name || ""}`, margin, y);
+          y += 6;
 
-          // Description du POI
           pdf.setFont("helvetica", "normal");
-          const descLines = pdf.splitTextToSize(
-            poi.description,
+          const desc = pdf.splitTextToSize(
+            poi?.description || "",
             contentWidth - 5
           );
-          pdf.text(descLines, margin + 5, currentY);
-          currentY += descLines.length * 5 + 8;
+          pdf.text(desc, margin + 5, y);
+          y += desc.length * 5 + 8;
         });
 
-        currentY += 5;
+        y += 5;
       }
 
-      // 3. ITINÉRAIRE (si accessible)
-      if (
-        roadTrip.itinerary?.length > 0 &&
-        (canAccessPremium || !roadTrip.isPremium)
-      ) {
-        // Nouvelle page si nécessaire
-        if (currentY > 200) {
-          pdf.addPage();
-          currentY = margin;
-        }
+      // Itinéraire
+      const canShowItin =
+        Array.isArray(roadTrip.itinerary) &&
+        roadTrip.itinerary.length > 0 &&
+        (canAccessPremium || !roadTrip.isPremium);
 
+      if (canShowItin) {
+        if (y > 200) {
+          pdf.addPage();
+          y = margin;
+        }
         pdf.setFontSize(16);
         pdf.setFont("helvetica", "bold");
-        pdf.text("Itinéraire jour par jour", margin, currentY);
-        currentY += 10;
+        pdf.text("Itinéraire jour par jour", margin, y);
+        y += 10;
 
         pdf.setFontSize(11);
         pdf.setFont("helvetica", "normal");
 
-        roadTrip.itinerary.forEach((step) => {
-          // Vérifier l'espace restant
-          if (currentY > 250) {
+        roadTrip.itinerary.forEach((step: any) => {
+          if (y > 250) {
             pdf.addPage();
-            currentY = margin;
+            y = margin;
           }
 
-          // Jour et titre
           pdf.setFont("helvetica", "bold");
-          const dayTitle = `Jour ${step.day} — ${step.title}`;
-          const dayLines = pdf.splitTextToSize(dayTitle, contentWidth);
-          pdf.text(dayLines, margin, currentY);
-          currentY += dayLines.length * 6 + 3;
+          const head = `Jour ${step?.day ?? ""} — ${step?.title ?? ""}`;
+          const headLines = pdf.splitTextToSize(head, contentWidth);
+          pdf.text(headLines, margin, y);
+          y += headLines.length * 6 + 3;
 
-          // Description
           pdf.setFont("helvetica", "normal");
-          const descLines = pdf.splitTextToSize(
-            step.description,
+          const desc = pdf.splitTextToSize(
+            step?.description || "",
             contentWidth - 5
           );
-          pdf.text(descLines, margin + 5, currentY);
-          currentY += descLines.length * 5;
+          pdf.text(desc, margin + 5, y);
+          y += desc.length * 5;
 
-          // Nuit sur place si applicable
-          if (step.overnight) {
+          if (step?.overnight) {
             pdf.setFont("helvetica", "italic");
-            pdf.text("🌙 Nuit sur place", margin + 5, currentY + 3);
-            currentY += 6;
+            pdf.text("🌙 Nuit sur place", margin + 5, y + 3);
+            y += 6;
           }
-
-          currentY += 8;
+          y += 8;
         });
-      }
-
-      // Itinéraire premium verrouillé
-      else if (roadTrip.isPremium && !canAccessPremium) {
+      } else if (roadTrip.isPremium && !canAccessPremium) {
         pdf.setFontSize(16);
         pdf.setFont("helvetica", "bold");
-        pdf.text("Itinéraire détaillé", margin, currentY);
-        currentY += 10;
+        pdf.text("Itinéraire détaillé", margin, y);
+        y += 10;
 
         pdf.setFontSize(11);
         pdf.setFont("helvetica", "normal");
-        pdf.text("🔒 Contenu réservé aux membres Premium", margin, currentY);
-        currentY += 6;
+        pdf.text("🔒 Contenu réservé aux membres Premium", margin, y);
+        y += 6;
         pdf.text(
           "Visitez notre site pour débloquer l'accès complet.",
           margin,
-          currentY
+          y
         );
       }
 
-      // Génération et téléchargement du PDF
-      const fileName = `${(roadTrip?.title || "roadtrip")
-        .replace(/[^a-zA-Z0-9\s]/g, "")
-        .replace(/\s+/g, "-")
-        .toLowerCase()}-roadtrip.pdf`;
-
+      // Enregistrer
+      const fileName = makePdfFileName(roadTrip?.title);
       pdf.save(fileName);
-    } catch (error) {
-      console.error("Erreur lors de la génération du PDF:", error);
-      alert("Erreur lors de la génération du PDF");
+    } catch (e: any) {
+      console.error("Erreur PDF:", e);
+      alert(
+        `Erreur lors de la génération du PDF${
+          e?.message ? ` : ${e.message}` : ""
+        }`
+      );
     }
-  };
+  }, [roadTrip, canAccessPremium]);
 
-  // 🔥 CORRECTION : Affichage d'erreur avec informations de debug
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -339,68 +322,26 @@ export default function RoadTripPage() {
   }
 
   return (
-    <div className="min-h-screen animate-fadeIn" id="roadtrip-pdf">
+    <>
+      <RoadTripView
+        roadTrip={roadTrip}
+        userRole={userRole}
+        canAccessPremium={canAccessPremium}
+        favorite={favorite}
+        favoriteLoading={favoriteLoading}
+        onAddToFavorites={handleAddToFavorites}
+        onShare={handleShare}
+        onGeneratePdf={generatePdf}
+        onDelete={handleDelete}
+      />
+
       <LoginPromptModal
         open={showLoginPrompt}
         onClose={() => setShowLoginPrompt(false)}
+        onConfirm={() => router.push("/login")}
+        title="Connectez-vous pour continuer"
+        message="Vous devez être connecté pour ajouter un favori."
       />
-
-      {/* HERO (inclus dans l'export) */}
-      <div id="pdf-hero" data-pdf-chunk>
-        <RoadTripHero
-          image={roadTrip.image}
-          title={roadTrip.title}
-          description={roadTrip.description}
-          country={roadTrip.country}
-          region={roadTrip.region}
-          duration={roadTrip.duration}
-          budget={roadTrip.budget}
-          isPremium={roadTrip.isPremium}
-          canAccessPremium={canAccessPremium}
-          tags={roadTrip.tags}
-        />
-      </div>
-
-      <div className="container max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-12 lg:py-16">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 sm:gap-10 lg:gap-12">
-          {/* COLONNE PRINCIPALE (incluse dans l'export) */}
-          <div
-            id="pdf-main"
-            data-pdf-chunk
-            className="lg:col-span-2 space-y-8 sm:space-y-12 lg:space-y-16"
-          >
-            {roadTrip.pointsOfInterest?.length > 0 && (
-              <PointsOfInterest points={roadTrip.pointsOfInterest} />
-            )}
-
-            {roadTrip.itinerary?.length > 0 && !roadTrip.isPremium && (
-              <RoadTripItinerary itinerary={roadTrip.itinerary} />
-            )}
-
-            {roadTrip.isPremium &&
-              roadTrip.itinerary?.length > 0 &&
-              (canAccessPremium ? (
-                <RoadTripItinerary itinerary={roadTrip.itinerary} />
-              ) : (
-                <PremiumItineraryLocked />
-              ))}
-          </div>
-
-          {/* SIDEBAR (non exportée) */}
-          <div id="pdf-sidebar" className="lg:col-span-1">
-            <RoadTripSidebar
-              roadTrip={roadTrip}
-              userRole={userRole}
-              canAccessPremium={canAccessPremium}
-              favorite={favorite}
-              handleAddToFavorites={handleAddToFavorites}
-              handleShare={handleShare}
-              generatePdf={generatePdf}
-              handleDelete={handleDelete}
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }

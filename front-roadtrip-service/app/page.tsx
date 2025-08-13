@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import dynamic from 'next/dynamic'
-import { useMounted } from "@/hooks/use-mounted"
+import { useMounted } from "@/hooks/useMounted"
 import Hero from "@/components/accueil/hero"
 import { RoadtripService } from "@/services/roadtrip-service"
 import Loading from "@/components/ui/loading"

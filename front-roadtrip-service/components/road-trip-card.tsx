@@ -19,7 +19,12 @@ interface RoadTripCardProps {
   country: string;
   region?: string;
   duration: number;
-  budget: string | number;
+  budget:
+    | number
+    | string
+    | { amount?: number; currency?: string }
+    | null
+    | undefined;
   tags: string[] | string | undefined;
   isPremium?: boolean;
   isFavorite?: boolean;
@@ -64,12 +69,36 @@ export default function RoadTripCard({
     : typeof tags === "string"
     ? [tags]
     : [];
-  const safeBudget =
-    typeof budget === "number"
-      ? `${budget} €`
-      : typeof budget === "string"
-      ? budget
-      : "? €";
+
+  type BudgetLike =
+    | number
+    | string
+    | { amount?: number; currency?: string }
+    | null
+    | undefined;
+
+  const toCurrencySymbol = (c?: string) => {
+    if (!c) return "€";
+    const up = c.toUpperCase();
+    if (up === "EUR") return "€";
+    if (up === "USD") return "$";
+    if (up === "GBP") return "£";
+    return c;
+  };
+
+  const formatBudget = (b: BudgetLike): string => {
+    const nf = new Intl.NumberFormat("fr-FR");
+
+    if (typeof b === "number" && isFinite(b)) return `${nf.format(b)} €`;
+    if (typeof b === "string") return b.replace(/\s*€/i, " €").trim();
+
+    if (b && typeof b === "object") {
+      const amount = Number((b as any).amount);
+      const currency = toCurrencySymbol((b as any).currency);
+      if (isFinite(amount)) return `${nf.format(amount)} ${currency || "€"}`;
+    }
+    return "—";
+  };
 
   return (
     <>
@@ -158,12 +187,10 @@ export default function RoadTripCard({
             )}
           </div>
 
-          <div className="text-sm">
-            <span className="text-red-600 font-semibold text-base">
-              {safeBudget}
-            </span>
-            <span className="text-gray-500 ml-1">estimé</span>
-          </div>
+          <span className="text-red-600 font-semibold text-base">
+            {formatBudget(budget)}
+          </span>
+          <span className="text-gray-500 ml-1">estimé</span>
         </CardContent>
 
         {/* Bouton en savoir plus */}

@@ -64,6 +64,35 @@ export default function Navbar() {
     checkAuth();
   }, [pathname]);
 
+  // Gestion des redirections de sécurité
+  useEffect(() => {
+    if (isLoading) return; // Attendre que l'auth soit vérifiée
+
+    // Si connecté et sur la page d'accueil -> redirection vers explorer
+    if (isAuthenticated && pathname === '/') {
+      router.push('/explorer');
+      return;
+    }
+
+    // Si pas connecté et sur une page protégée -> redirection vers accueil
+    if (!isAuthenticated && (pathname.startsWith('/profile') || pathname.startsWith('/favorites') || pathname.startsWith('/admin') || pathname.startsWith('/ai'))) {
+      router.push('/');
+      return;
+    }
+
+    // Si connecté mais pas admin et sur /admin -> redirection vers explorer
+    if (isAuthenticated && !isAdmin && pathname.startsWith('/admin')) {
+      router.push('/explorer');
+      return;
+    }
+
+    // Si connecté mais pas premium/admin et sur /ai -> redirection vers premium
+    if (isAuthenticated && !isPremium && !isAdmin && pathname.startsWith('/ai')) {
+      router.push('/premium');
+      return;
+    }
+  }, [isAuthenticated, isAdmin, isPremium, pathname, router, isLoading]);
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener("scroll", handleScroll);
@@ -76,18 +105,44 @@ export default function Navbar() {
     setIsAuthenticated(false);
     setUserRole(null);
     await AuthService.logout();
-    router.push("/auth");
+    router.push("/");
+  };
+
+  const handleNavigation = (href: string) => {
+    // Si connecté et tentative d'aller vers accueil -> redirection vers explorer
+    if (isAuthenticated && href === '/') {
+      router.push('/explorer');
+      return;
+    }
+
+    // Vérifications avant navigation
+    if (!isAuthenticated && (href.startsWith('/profile') || href.startsWith('/favorites') || href.startsWith('/admin') || href.startsWith('/ai'))) {
+      router.push('/');
+      return;
+    }
+
+    if (isAuthenticated && !isAdmin && href.startsWith('/admin')) {
+      router.push('/explorer');
+      return;
+    }
+
+    if (isAuthenticated && !isPremium && !isAdmin && href.startsWith('/ai')) {
+      router.push('/premium');
+      return;
+    }
+
+    router.push(href);
   };
 
   const navItems = [
-    { name: "Accueil", href: "/", icon: Home, hideWhenAuth: true },
+    { name: "Accueil", href: "/", icon: Home, showOnlyWhenNotAuth: true },
     { name: "Explorer", href: "/explorer", icon: Map },
     { name: "Favoris", href: "/favorites", icon: Heart, requiresAuth: true },
   ];
 
   const filteredNavItems = navItems.filter((item) => {
     if (item.requiresAuth && !isAuthenticated) return false;
-    if (item.hideWhenAuth && isAuthenticated) return false;
+    if (item.showOnlyWhenNotAuth && isAuthenticated) return false;
     return true;
   });
 
@@ -100,7 +155,10 @@ export default function Navbar() {
     >
       <div className="container flex h-16 items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-6">
-          <Link href="/" className="flex items-center">
+          <button
+            onClick={() => handleNavigation("/")}
+            className="flex items-center"
+          >
             <Image
               src="/logo.png"
               alt="ROADTRIP!"
@@ -117,13 +175,13 @@ export default function Navbar() {
               className="block sm:hidden h-8 w-auto"
               priority
             />
-          </Link>
+          </button>
 
           <nav className="hidden md:flex gap-6">
             {filteredNavItems.map(({ name, href, icon: Icon }) => (
-              <Link
+              <button
                 key={href}
-                href={href}
+                onClick={() => handleNavigation(href)}
                 className={cn(
                   "flex items-center text-sm font-medium transition-colors relative py-1",
                   pathname === href
@@ -136,19 +194,21 @@ export default function Navbar() {
                 {pathname === href && (
                   <span className="absolute bottom-0 left-0 w-full h-0.5 bg-primary rounded-full" />
                 )}
-              </Link>
+              </button>
             ))}
           </nav>
         </div>
 
         <div className="hidden md:flex items-center gap-3">
           {isAdmin && (
-            <Link href="/admin">
-              <Button variant="outline" size="sm">
-                <Settings className="mr-2 h-4 w-4" />
-                Admin
-              </Button>
-            </Link>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => handleNavigation("/admin")}
+            >
+              <Settings className="mr-2 h-4 w-4" />
+              Admin
+            </Button>
           )}
 
           {isLoading ? (
@@ -162,17 +222,13 @@ export default function Navbar() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem asChild>
-                  <Link href="/profile" className="flex items-center">
-                    <User className="mr-2 h-4 w-4" />
-                    Profil
-                  </Link>
+                <DropdownMenuItem onClick={() => handleNavigation("/profile")}>
+                  <User className="mr-2 h-4 w-4" />
+                  Profil
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/favorites" className="flex items-center">
-                    <Heart className="mr-2 h-4 w-4" />
-                    Favoris
-                  </Link>
+                <DropdownMenuItem onClick={() => handleNavigation("/favorites")}>
+                  <Heart className="mr-2 h-4 w-4" />
+                  Favoris
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>
@@ -182,27 +238,31 @@ export default function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Link href="/auth">
-              <Button variant="outline" size="sm">
-                <User className="mr-2 h-4 w-4" />
-                Connexion
-              </Button>
-            </Link>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => handleNavigation("/auth")}
+            >
+              <User className="mr-2 h-4 w-4" />
+              Connexion
+            </Button>
           )}
 
           {!isAuthenticated || (!isPremium && !isAdmin) ? (
-            <Link href="/premium">
-              <Button className="bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 shadow-sm">
-                Premium
-              </Button>
-            </Link>
+            <Button 
+              className="bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 shadow-sm"
+              onClick={() => handleNavigation("/premium")}
+            >
+              Premium
+            </Button>
           ) : (
-            <Link href="/ai">
-              <Button className="bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 shadow-sm">
-                <Sparkles className="mr-2 h-4 w-4" />
-                IA
-              </Button>
-            </Link>
+            <Button 
+              className="bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 shadow-sm"
+              onClick={() => handleNavigation("/ai")}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              IA
+            </Button>
           )}
         </div>
 
@@ -230,12 +290,14 @@ export default function Navbar() {
           className="md:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-4 shadow-sm"
         >
           {filteredNavItems.map(({ name, href, icon: Icon }) => (
-            <Link
+            <button
               key={href}
-              href={href}
-              onClick={() => setIsMenuOpen(false)}
+              onClick={() => {
+                handleNavigation(href);
+                setIsMenuOpen(false);
+              }}
               className={cn(
-                "flex items-center text-sm font-medium gap-2 transition-colors",
+                "flex items-center text-sm font-medium gap-2 transition-colors w-full text-left",
                 pathname === href
                   ? "text-primary"
                   : "text-gray-700 hover:text-primary"
@@ -243,7 +305,7 @@ export default function Navbar() {
             >
               <Icon className="h-4 w-4" />
               {name}
-            </Link>
+            </button>
           ))}
 
           <hr />
@@ -253,60 +315,82 @@ export default function Navbar() {
           ) : isAuthenticated ? (
             <>
               {isAdmin && (
-                <Link href="/admin" onClick={() => setIsMenuOpen(false)}>
-                  <Button variant="outline" className="w-full">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Admin
-                  </Button>
-                </Link>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => {
+                    handleNavigation("/admin");
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  <Settings className="mr-2 h-4 w-4" />
+                  Admin
+                </Button>
               )}
-              <Link
-                href="/profile"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-2 text-sm"
+              <button
+                onClick={() => {
+                  handleNavigation("/profile");
+                  setIsMenuOpen(false);
+                }}
+                className="flex items-center gap-2 text-sm w-full text-left"
               >
                 <User className="h-4 w-4" /> Mon profil
-              </Link>
-              <Link
-                href="/favorites"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-2 text-sm"
+              </button>
+              <button
+                onClick={() => {
+                  handleNavigation("/favorites");
+                  setIsMenuOpen(false);
+                }}
+                className="flex items-center gap-2 text-sm w-full text-left"
               >
                 <Heart className="h-4 w-4" /> Favoris
-              </Link>
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   handleLogout();
                   setIsMenuOpen(false);
                 }}
-                className="flex items-center gap-2 text-sm text-red-600 hover:underline"
+                className="flex items-center gap-2 text-sm text-red-600 hover:underline w-full text-left"
               >
                 <LogOut className="h-4 w-4" /> Déconnexion
               </button>
 
               {!isPremium && !isAdmin ? (
-                <Link href="/premium" onClick={() => setIsMenuOpen(false)}>
-                  <Button className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 mt-3">
-                    Premium
-                  </Button>
-                </Link>
+                <Button 
+                  className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 mt-3"
+                  onClick={() => {
+                    handleNavigation("/premium");
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  Premium
+                </Button>
               ) : (
-                <Link href="/ai" onClick={() => setIsMenuOpen(false)}>
-                  <Button className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 mt-3">
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    IA
-                  </Button>
-                </Link>
+                <Button 
+                  className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90 mt-3"
+                  onClick={() => {
+                    handleNavigation("/ai");
+                    setIsMenuOpen(false);
+                  }}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  IA
+                </Button>
               )}
             </>
           ) : (
-            <Link href="/auth" onClick={() => setIsMenuOpen(false)}>
-              <Button variant="outline" className="w-full">
-                <User className="mr-2 h-4 w-4" />
-                Connexion
-              </Button>
-            </Link>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => {
+                handleNavigation("/auth");
+                setIsMenuOpen(false);
+              }}
+            >
+              <User className="mr-2 h-4 w-4" />
+              Connexion
+            </Button>
           )}
         </div>
       )}

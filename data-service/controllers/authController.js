@@ -14,7 +14,7 @@ class AuthController {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         logger.warn("❌ Erreurs de validation lors de l'inscription", {
-          service: "auth-service",
+          service: "data-service",
           action: "validation_error",
           errors: errors.array(),
         });
@@ -25,7 +25,7 @@ class AuthController {
         req.body;
 
       logger.info("🔍 Données d'inscription reçues", {
-        service: "auth-service",
+        service: "data-service",
         action: "data_received",
         email,
         firstName,
@@ -36,7 +36,7 @@ class AuthController {
       const existingUser = await User.findOne({ email });
       if (existingUser) {
         logger.warn("❌ Tentative d'inscription avec email existant", {
-          service: "auth-service",
+          service: "data-service",
           action: "email_already_exists",
           email,
         });
@@ -50,7 +50,7 @@ class AuthController {
       if (provider) {
         isVerified = true;
         logger.info("🔐 Inscription OAuth détectée", {
-          service: "auth-service",
+          service: "data-service",
           action: "oauth_registration",
           provider,
           email,
@@ -68,7 +68,7 @@ class AuthController {
         isVerified = false;
 
         logger.info("🔐 Inscription classique détectée", {
-          service: "auth-service",
+          service: "data-service",
           action: "classic_registration",
           email,
         });
@@ -92,7 +92,7 @@ class AuthController {
 
       await newUser.save();
       logger.info("✅ Utilisateur sauvegardé avec succès", {
-        service: "auth-service",
+        service: "data-service",
         action: "user_saved",
         userId: newUser._id,
         email: newUser.email,
@@ -106,7 +106,7 @@ class AuthController {
         process.nextTick(async () => {
           try {
             logger.info("🚀 Démarrage envoi email de confirmation", {
-              service: "auth-service",
+              service: "data-service",
               action: "email_send_start",
               email: newUser.email,
               userId: newUser._id,
@@ -117,7 +117,7 @@ class AuthController {
               logger.info(
                 "🚫 Utilisateur déjà vérifié - Annulation envoi email",
                 {
-                  service: "auth-service",
+                  service: "data-service",
                   action: "email_cancelled_user_verified",
                   email: newUser.email,
                   userId: newUser._id,
@@ -128,7 +128,7 @@ class AuthController {
 
             if (!currentUser || !currentUser.verificationToken) {
               logger.error("❌ Token de vérification manquant", {
-                service: "auth-service",
+                service: "data-service",
                 action: "missing_verification_token",
                 email: newUser.email,
                 userId: newUser._id,
@@ -139,7 +139,7 @@ class AuthController {
             }
 
             logger.info("📧 Tentative d'envoi email de confirmation", {
-              service: "auth-service",
+              service: "data-service",
               action: "email_send_attempt",
               email: newUser.email,
               token: newUser.verificationToken.substring(0, 8) + "...",
@@ -151,7 +151,7 @@ class AuthController {
             );
 
             logger.info("✅ Résultat envoi email de confirmation", {
-              service: "auth-service",
+              service: "data-service",
               action: "email_send_result",
               email: newUser.email,
               status: emailResult?.status,
@@ -161,7 +161,7 @@ class AuthController {
             logger.error(
               "❌ Erreur critique lors de l'envoi d'email de confirmation",
               {
-                service: "auth-service",
+                service: "data-service",
                 action: "email_send_critical_error",
                 email: newUser.email,
                 error: error.message,
@@ -175,7 +175,7 @@ class AuthController {
       }
 
       logger.info("✅ Inscription terminée avec succès - Réponse immédiate", {
-        service: "auth-service",
+        service: "data-service",
         action: "registration_completed",
         userId: newUser._id,
         email: newUser.email,
@@ -201,7 +201,7 @@ class AuthController {
       });
     } catch (error) {
       logger.error("Erreur critique lors de l'inscription", {
-        service: "auth-service",
+        service: "data-service",
         action: "registration_error",
         error: error.message,
         stack: error.stack,
@@ -313,7 +313,7 @@ class AuthController {
 
       if (mongoose.connection.readyState !== 1) {
         logger.error("❌ Base de données non disponible", {
-          service: "auth-service",
+          service: "data-service",
           action: "db_not_ready",
           readyState: mongoose.connection.readyState,
         });
@@ -324,7 +324,7 @@ class AuthController {
       }
 
       logger.info("🔍 Recherche utilisateur par téléphone", {
-        service: "auth-service",
+        service: "data-service",
         action: "user_lookup_start",
         phoneNumber: phoneNumber.substring(0, 3) + "***",
       });
@@ -334,13 +334,13 @@ class AuthController {
         user = await User.findOne({ phoneNumber }).maxTimeMS(8000).lean();
 
         logger.info("✅ Recherche utilisateur terminée", {
-          service: "auth-service",
+          service: "data-service",
           action: "user_lookup_complete",
           userFound: !!user,
         });
       } catch (dbError) {
         logger.error("❌ Erreur base de données lors de la recherche", {
-          service: "auth-service",
+          service: "data-service",
           action: "db_query_error",
           error: dbError.message,
           errorCode: dbError.code,
@@ -368,7 +368,7 @@ class AuthController {
           );
 
           logger.info("✅ Code de réinitialisation généré et sauvegardé", {
-            service: "auth-service",
+            service: "data-service",
             action: "reset_code_saved",
             userId: user._id,
             phoneNumber: phoneNumber.substring(0, 3) + "***",
@@ -384,7 +384,7 @@ class AuthController {
 
               if (smsResult.success) {
                 logger.info("✅ SMS de réinitialisation envoyé avec succès", {
-                  service: "auth-service",
+                  service: "data-service",
                   action: "sms_sent_success",
                   phoneNumber: phoneNumber.substring(0, 3) + "***",
                   deliveryId: smsResult.deliveryId,
@@ -393,7 +393,7 @@ class AuthController {
                 // Si il y a un warning, on le log aussi
                 if (smsResult.warning) {
                   logger.warn("⚠️ SMS envoyé avec avertissement", {
-                    service: "auth-service",
+                    service: "data-service",
                     action: "sms_sent_warning",
                     phoneNumber: phoneNumber.substring(0, 3) + "***",
                     warning: smsResult.warning,
@@ -405,7 +405,7 @@ class AuthController {
               }
             } catch (smsError) {
               logger.error("❌ Échec envoi SMS de réinitialisation", {
-                service: "auth-service",
+                service: "data-service",
                 action: "sms_send_failed",
                 error: smsError.message,
                 phoneNumber: phoneNumber.substring(0, 3) + "***",
@@ -416,7 +416,7 @@ class AuthController {
               logger.info(
                 "ℹ️ Code de réinitialisation disponible malgré l'erreur SMS",
                 {
-                  service: "auth-service",
+                  service: "data-service",
                   action: "reset_code_available",
                   phoneNumber: phoneNumber.substring(0, 3) + "***",
                 }
@@ -427,7 +427,7 @@ class AuthController {
           logger.error(
             "❌ Erreur lors de la sauvegarde du code de réinitialisation",
             {
-              service: "auth-service",
+              service: "data-service",
               action: "save_reset_code_error",
               error: saveError.message,
               userId: user._id,
@@ -441,7 +441,7 @@ class AuthController {
         }
       } else {
         logger.info("🔍 Aucun utilisateur trouvé pour ce numéro", {
-          service: "auth-service",
+          service: "data-service",
           action: "user_not_found",
           phoneNumber: phoneNumber.substring(0, 3) + "***",
         });
@@ -455,7 +455,7 @@ class AuthController {
       });
     } catch (error) {
       logger.error("❌ Erreur critique lors de la réinitialisation par SMS", {
-        service: "auth-service",
+        service: "data-service",
         action: "critical_sms_reset_error",
         error: error.message,
         stack: error.stack,
@@ -529,7 +529,7 @@ class AuthController {
 
       if (user.isVerified) {
         logger.warn("⚠️ Tentative de vérification d'un compte déjà vérifié", {
-          service: "auth-service",
+          service: "data-service",
           action: "already_verified_attempt",
           userId: user._id,
           email: user.email,
@@ -552,7 +552,7 @@ class AuthController {
       await user.save();
 
       logger.info("✅ Compte vérifié avec succès", {
-        service: "auth-service",
+        service: "data-service",
         action: "account_verified",
         userId: user._id,
         email: user.email,
@@ -569,7 +569,7 @@ class AuthController {
       });
     } catch (error) {
       logger.error("Erreur lors de la vérification du compte", {
-        service: "auth-service",
+        service: "data-service",
         action: "account_verification_error",
         error: error.message,
         stack: error.stack,
@@ -588,7 +588,7 @@ class AuthController {
       }
 
       logger.info("🔑 Demande de réinitialisation de mot de passe", {
-        service: "auth-service",
+        service: "data-service",
         action: "password_reset_request",
         email,
       });
@@ -604,7 +604,7 @@ class AuthController {
           user.resetCodeExpires > twoMinutesAgo
         ) {
           logger.warn("🚫 Code de réinitialisation déjà généré récemment", {
-            service: "auth-service",
+            service: "data-service",
             action: "reset_code_too_recent",
             email,
             expiresAt: user.resetCodeExpires,
@@ -629,7 +629,7 @@ class AuthController {
         await user.save();
 
         logger.info("✅ Code de réinitialisation généré", {
-          service: "auth-service",
+          service: "data-service",
           action: "reset_code_generated",
           email,
           expiresAt: resetCodeExpires,
@@ -647,7 +647,7 @@ class AuthController {
               logger.info(
                 "🚫 Code de réinitialisation déjà utilisé ou expiré - Annulation envoi",
                 {
-                  service: "auth-service",
+                  service: "data-service",
                   action: "email_cancelled_code_invalid",
                   email,
                 }
@@ -658,7 +658,7 @@ class AuthController {
             await NotificationService.sendPasswordResetEmail(email, resetCode);
 
             logger.info("✅ Email de réinitialisation envoyé en arrière-plan", {
-              service: "auth-service",
+              service: "data-service",
               action: "reset_email_sent",
               email,
             });
@@ -666,7 +666,7 @@ class AuthController {
             logger.error(
               "❌ Échec envoi email réinitialisation en arrière-plan",
               {
-                service: "auth-service",
+                service: "data-service",
                 action: "reset_email_failed",
                 email,
                 error: error.message,
@@ -676,7 +676,7 @@ class AuthController {
         });
       } else {
         logger.warn("🔍 Tentative de réinitialisation pour email inexistant", {
-          service: "auth-service",
+          service: "data-service",
           action: "reset_email_not_found",
           email,
         });
@@ -688,7 +688,7 @@ class AuthController {
       });
     } catch (error) {
       logger.error("Erreur lors de la demande de réinitialisation", {
-        service: "auth-service",
+        service: "data-service",
         action: "password_reset_error",
         error: error.message,
         stack: error.stack,
@@ -723,7 +723,7 @@ class AuthController {
       logger.info(
         "🚫 Annulation des emails de réinitialisation suite à l'utilisation du code",
         {
-          service: "auth-service",
+          service: "data-service",
           action: "cancel_emails_on_reset",
           email,
           userId: user._id,
@@ -742,7 +742,7 @@ class AuthController {
       await user.save();
 
       logger.info("✅ Mot de passe réinitialisé avec succès via code", {
-        service: "auth-service",
+        service: "data-service",
         action: "password_reset_success",
         email,
         userId: user._id,
@@ -796,7 +796,7 @@ class AuthController {
       logger.info(
         "🚫 Annulation des emails de réinitialisation suite au changement de mot de passe",
         {
-          service: "auth-service",
+          service: "data-service",
           action: "cancel_reset_emails_on_change",
           email: user.email,
           userId,
@@ -818,7 +818,7 @@ class AuthController {
       logger.info(
         "✅ Mot de passe changé avec succès + codes de réinitialisation invalidés",
         {
-          service: "auth-service",
+          service: "data-service",
           action: "password_changed_success",
           userId,
           email: user.email,

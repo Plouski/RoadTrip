@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AdminService } from "@/services/admin-service";
 import Loading from "@/components/ui/loading";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertMessage } from "@/components/ui/alert-message";
@@ -21,37 +20,6 @@ const RoadtripsListPage = dynamic(() => import("./roadtrip/page"), {
   ssr: false,
   loading: () => <Loading text="Chargement des roadtrips..." />,
 });
-
-function useAdminGuard() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [allowed, setAllowed] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const ok = await AdminService.isAdmin();
-        if (!mounted) return;
-        if (!ok) {
-          router.replace("/");
-          setAllowed(false);
-        } else {
-          setAllowed(true);
-        }
-      } catch (e) {
-        router.replace("/");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [router]);
-
-  return { loading, allowed } as const;
-}
 
 function usePersistentTab(defaultTab: string) {
   const router = useRouter();
@@ -83,14 +51,10 @@ function usePersistentTab(defaultTab: string) {
 }
 
 export default function AdminDashboard() {
-  const { loading, allowed } = useAdminGuard();
   const { tab, onValueChange } = usePersistentTab("dashboard");
 
   const [alertMessage, setAlertMessage] = useState("");
   const [alertType, setAlertType] = useState<"success" | "error" | null>(null);
-
-  if (loading) return <Loading text="Chargement des autorisations..." />;
-  if (!allowed) return null;
 
   return (
     <div className="container py-10">

@@ -1,7 +1,7 @@
 # 📧 Notification Service - ROADTRIP MVP
 
 > **Microservice de Notifications Multi-Canal pour l'écosystème ROADTRIP**  
-> *Projet M2 - MVP Microservices - Certification RNCP39583*
+> _Projet M2 - MVP Microservices - Certification RNCP39583_
 
 ## 📋 Vue d'ensemble
 
@@ -16,12 +16,14 @@ Service Node.js gérant les **notifications emails et SMS** avec intégration Ma
 - ✅ **Multi-Provider** : Mailjet (email) + Free Mobile (SMS)
 - ✅ **Monitoring Intégré** : Métriques Prometheus + health checks
 - ✅ **Fallback Mode** : Simulation si providers non configurés
+- ✅ **Formulaire Contact** : Gestion emails support + confirmation utilisateur
 
 ---
 
 ## 🚀 Installation & Démarrage
 
 ### Prérequis
+
 ```bash
 Node.js 20+
 npm ou yarn
@@ -30,6 +32,7 @@ Compte Free Mobile avec API SMS (SMS)
 ```
 
 ### Configuration
+
 ```bash
 # Cloner et installer
 git clone <repo>
@@ -41,11 +44,12 @@ cp .env.example .env
 ```
 
 ### Variables d'environnement
+
 ```env
 # Service Configuration
 PORT=5005
 NODE_ENV=development
-API_KEY=your-secret-api-key-here
+NOTIFICATION_API_KEY=your-secret-api-key-here
 CORS_ORIGIN=http://localhost:3000
 
 # Email Provider (Mailjet)
@@ -58,11 +62,15 @@ EMAIL_FROM_ADDRESS=noreply@roadtrip.fr
 FREE_SMS_USER=your-free-mobile-username
 FREE_SMS_PASS=your-free-mobile-api-key
 
+# Contact Configuration
+CONTACT_RECEIVE_EMAIL=contact@roadtrip.com
+
 # Frontend
 FRONTEND_URL=http://localhost:3000
 ```
 
 ### Lancement
+
 ```bash
 # Développement
 npm run dev
@@ -84,6 +92,7 @@ npm run health
 ### 📧 Notifications Email
 
 #### Email de Confirmation
+
 ```http
 POST /api/email/confirm
 Content-Type: application/json
@@ -96,20 +105,14 @@ x-api-key: your-secret-api-key
 ```
 
 **Template Email Confirmation :**
-```html
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-  <h1 style="color: #E30613;">Bienvenue sur ROADTRIP!</h1>
-  <p>Cliquez sur le lien ci-dessous pour confirmer votre compte :</p>
-  <a href="http://localhost:3000/confirm-account?token=abc123def456" 
-     style="background: #E30613; color: white; padding: 15px 30px; 
-            text-decoration: none; border-radius: 5px;">
-    Confirmer mon compte
-  </a>
-  <p>Ce lien expire dans 24 heures.</p>
-</div>
-```
+
+- Design responsive avec couleurs ROADTRIP (#E30613)
+- Bouton CTA pour confirmation de compte
+- Lien de fallback en cas de problème avec le bouton
+- Expiration automatique du token (24h)
 
 #### Email de Réinitialisation
+
 ```http
 POST /api/email/reset
 Content-Type: application/json
@@ -122,22 +125,63 @@ x-api-key: your-secret-api-key
 ```
 
 **Template Email Reset :**
-```html
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-  <h1 style="color: #E30613;">Réinitialisation de mot de passe</h1>
-  <p>Voici votre code de réinitialisation :</p>
-  <div style="background: #f5f5f5; padding: 20px; text-align: center;">
-    <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #E30613;">
-      123456
-    </span>
-  </div>
-  <p>Ce code expire dans 1 heure.</p>
-</div>
+
+- Code à 6 chiffres stylisé et centré
+- Police large avec espacement pour faciliter la lecture
+- Couleurs branded ROADTRIP
+- Expiration automatique du code (1h)
+
+### 📮 Formulaire de Contact
+
+#### Envoi Message Contact
+
+```http
+POST /api/contact/send
+Content-Type: application/json
+x-api-key: your-secret-api-key
+
+{
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "subject": "Demande d'information",
+  "category": "info",
+  "message": "Votre message ici...",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "userAgent": "Mozilla/5.0...",
+  "source": "contact-form"
+}
 ```
+
+**Catégories disponibles :**
+
+- `problem` : Problème technique (🐛, priorité haute)
+- `info` : Demande d'information (ℹ️, priorité normale)
+- `suggestion` : Suggestion d'amélioration (⭐, priorité basse)
+- `feedback` : Retour d'expérience (💚, priorité normale)
+- `other` : Autre (💬, priorité normale)
+
+**Réponse immédiate :**
+
+```json
+{
+  "success": true,
+  "message": "Votre message a été reçu et est en cours de traitement...",
+  "messageId": "contact-1642248600000-abc123",
+  "duration": "45ms",
+  "status": "processing"
+}
+```
+
+**Processus asynchrone :**
+
+1. Email envoyé à l'équipe support (`CONTACT_RECEIVE_EMAIL`)
+2. Email de confirmation envoyé à l'utilisateur
+3. Logs détaillés pour suivi et debugging
 
 ### 📱 Notifications SMS
 
 #### SMS Code de Réinitialisation
+
 ```http
 POST /api/sms/reset
 Content-Type: application/json
@@ -150,25 +194,20 @@ x-api-key: your-secret-api-key
 }
 ```
 
-**Réponse Success :**
-```json
-{
-  "success": true,
-  "status": 200
-}
-```
+**Format du SMS :**
 
-**Message SMS :**
 ```
 RoadTrip! - Votre code de réinitialisation est : 654321
 ```
 
 ### 🔧 Système & Monitoring
+
 ```http
 GET /health          # État du service + providers
-GET /vitals          # Statistiques système
+GET /vitals          # Statistiques système détaillées
 GET /metrics         # Métriques Prometheus
 GET /ping            # Test connectivité simple
+GET /api/test/mailjet # Test configuration Mailjet
 ```
 
 ---
@@ -176,36 +215,22 @@ GET /ping            # Test connectivité simple
 ## 🏗️ Architecture
 
 ### Structure Projet
+
 ```
 notification-service/
-├── services/              # Services notifications
-│   ├── emailService.js    # Service Mailjet
-│   └── smsService.js      # Service Free Mobile
-├── utils/                 # Utilitaires
-│   └── logger.js         # Logger ROADTRIP
-├── test/                  # Tests
+├── services/               # Services notifications
+│   ├── emailService.js     # Service Mailjet avec templates
+│   └── smsService.js       # Service Free Mobile
+├── utils/                  # Utilitaires
+│   └── logger.js           # Logger ROADTRIP structuré
+├── tests/                  # Tests complets
 │   └── notification.test.js
-├── routes.js              # Routes API centralisées
+├── routes.js              # Routes API centralisées + middleware
 ├── metrics.js             # Métriques Prometheus
-├── index.js               # Point d'entrée + serveur
+├── index.js               # Point d'entrée + serveur Express
 ├── package.json           # Dépendances
-└── Dockerfile             # Container
-```
-
-### Flow Notifications
-```mermaid
-graph LR
-    A[Service Client] --> B[API Key Check]
-    B --> C{Provider Type}
-    C -->|Email| D[Mailjet Service]
-    C -->|SMS| E[Free Mobile Service]
-    D --> F[Email Template]
-    E --> G[SMS Message]
-    F --> H[Send Email]
-    G --> I[Send SMS]
-    H --> J[Log Success/Failure]
-    I --> J
-    J --> K[Metrics Update]
+├── Dockerfile             # Container
+└── README.md              # Documentation
 ```
 
 ---
@@ -213,50 +238,127 @@ graph LR
 ## 🔒 Sécurité & Authentification
 
 ### API Key Protection
+
 ```javascript
 // Middleware sécurité inter-services
 const requireApiKey = (req, res, next) => {
   const apiKey = req.headers["x-api-key"];
   if (!apiKey || apiKey !== process.env.NOTIFICATION_API_KEY) {
+    logger.warn("❌ Tentative d'accès sans API key valide", {
+      ip: req.ip,
+      userAgent: req.get("User-Agent"),
+      providedKey: apiKey ? "present" : "missing",
+    });
     return res.status(403).json({ error: "API key requise" });
   }
   next();
 };
+```
 
-// Validation email
+### Validation Robuste
+
+```javascript
+// Validation email stricte
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+// Validation les données avant envoi
+validateContactForm(formData: ContactFormData): { isValid: boolean; errors: string[] } {
+    const errors: string[] = [];
+
+    if (!formData.name || formData.name.trim().length < 2) {
+      errors.push("Le nom doit contenir au moins 2 caractères");
+    }
+
+    if (!formData.email || !this.isValidEmail(formData.email)) {
+      errors.push("Veuillez entrer une adresse email valide");
+    }
+
+    if (!formData.subject || formData.subject.trim().length < 5) {
+      errors.push("Le sujet doit contenir au moins 5 caractères");
+    }
+
+    if (!formData.message || formData.message.trim().length < 10) {
+      errors.push("Le message doit contenir au moins 10 caractères");
+    }
+
+    // Validation anti-spam basique
+    if (formData.message.includes('http://') || formData.message.includes('https://')) {
+      if (formData.message.split('http').length > 3) {
+        errors.push("Trop de liens dans le message");
+      }
+    }
+
+    // Vérification de longueur maximale
+    if (formData.message.length > 2000) {
+      errors.push("Le message est trop long (maximum 2000 caractères)");
+    }
+
+    if (formData.subject.length > 200) {
+      errors.push("Le sujet est trop long (maximum 200 caractères)");
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+    };
+  }
 ```
 
 ### Configuration Providers Sécurisée
-```javascript
-// Email Service - Mailjet
-const transporter = nodemailer.createTransporter(
-  mailjetTransport({
-    auth: {
-      apiKey: process.env.MAILJET_API_KEY,
-      apiSecret: process.env.MAILJET_API_SECRET,
-    },
-  })
-);
 
-// SMS Service - Free Mobile
-const smsConfig = {
-  baseURL: 'https://smsapi.free-mobile.fr/sendmsg',
-  timeout: 10000,
-  validateStatus: (status) => status === 200
+```javascript
+// Email Service - Mailjet avec pool de connexions
+const transportConfig = {
+  auth: {
+    apiKey: process.env.MAILJET_API_KEY,
+    apiSecret: process.env.MAILJET_API_SECRET,
+  },
+  pool: false,
+  maxConnections: 1,
+  maxMessages: 1,
+  rateLimit: 1000,
+};
+
+// Timeout de sécurité pour tous les envois
+const withTimeout = (promise, timeoutMs = 30000, operation = "operation") => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        logger.error(`⏰ Timeout ${operation} après ${timeoutMs}ms`);
+        reject(new Error(`Timeout ${operation} après ${timeoutMs}ms`));
+      }, timeoutMs);
+
+      promise.finally(() => clearTimeout(timeoutId));
+    }),
+  ]);
 };
 ```
 
 ### Templates Sécurisés
+
 ```javascript
 // Prévention XSS dans templates
 const createConfirmationEmail = (token) => {
-  const sanitizedToken = token.replace(/[<>"']/g, ''); // Basic sanitization
-  const link = `${process.env.FRONTEND_URL}/confirm-account?token=${sanitizedToken}`;
-  
+  const link = `${process.env.FRONTEND_URL}/confirm-account?token=${token}`;
+
   return {
-    subject: "Confirmez votre compte - ROADTRIP!",
-    html: `<!-- Template HTML sécurisé -->`
+    subject: "Confirmez votre compte - RoadTrip!",
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h1 style="color: #E30613;">Bienvenue sur RoadTrip!</h1>
+        <p>Cliquez sur le lien ci-dessous pour confirmer votre compte :</p>
+        <a href="${link}" style="background: #E30613; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+          Confirmer mon compte
+        </a>
+        <p style="margin-top: 20px; font-size: 14px; color: #666;">
+          Si le bouton ne fonctionne pas, copiez ce lien : ${link}
+        </p>
+        <p style="margin-top: 20px; font-size: 12px; color: #999;">
+          Ce lien expire dans 24 heures.
+        </p>
+      </div>
+    `,
   };
 };
 ```
@@ -265,43 +367,61 @@ const createConfirmationEmail = (token) => {
 
 ## 📊 Monitoring & Métriques
 
-### Métriques Prometheus Spécialisées
-- **Notifications** : `notification_service_emails_sent_total`
-- **SMS** : `notification_service_sms_sent_total`
-- **Providers** : `notification_service_external_service_health`
-- **Performance** : `notification_service_http_request_duration_seconds`
+### Health Checks Avancés
 
-### Health Check Avancé
 ```bash
+# Test général
 curl http://localhost:5005/health
 # {
 #   "status": "healthy",
 #   "service": "notification-service",
-#   "providers": {
-#     "mailjet": true,
-#     "freeMobile": true
-#   },
-#   "timestamp": "2024-01-15T10:30:00.000Z"
+#   "timestamp": "2024-01-15T10:30:00.000Z",
+#   "uptime": 3600
+# }
+
+# Test Mailjet spécifique
+curl -H "x-api-key: your-key" http://localhost:5005/api/test/mailjet
+# {
+#   "success": true,
+#   "message": "Configuration Mailjet OK",
+#   "duration": "52ms",
+#   "details": {...}
 # }
 ```
 
-### Logs Structurés
+### Logs Structurés & Traçabilité
+
 ```javascript
-// Log email envoyé
-logger.info("Email de confirmation envoyé avec succès", {
+// Log email avec ID opération
+logger.info("🎉 Email envoyé avec succès", {
+  operationId: "email-1642248600-abc123",
   type: "email",
-  action: "confirmation", 
-  email: "user@example.com",
+  action: "confirmation",
+  to: "user@example.com",
   messageId: "msg-12345",
-  provider: "mailjet"
+  duration: "1250ms",
+  provider: "mailjet",
+  accepted: 1,
+  rejected: 0,
 });
 
-// Log SMS envoyé
-logger.info("SMS envoyé avec succès via Free Mobile", {
-  type: "sms",
-  provider: "freemobile",
-  username: "12345678",
-  status: 200
+// Log contact avec catégorisation
+logger.info("📧 Nouvelle demande de contact", {
+  type: "contact",
+  email: "user@example.com",
+  category: "info",
+  subject: "Demande d'information sur...",
+  messageId: "contact-1642248600-def456",
+});
+
+// Log erreur avec contexte
+logger.error("❌ Erreur envoi email", {
+  operationId: "email-1642248600-xyz789",
+  to: "user@example.com",
+  error: "Connection timeout",
+  duration: "30000ms",
+  isTimeout: true,
+  provider: "mailjet",
 });
 ```
 
@@ -309,73 +429,88 @@ logger.info("SMS envoyé avec succès via Free Mobile", {
 
 ## 🧪 Tests & Qualité
 
-### Coverage Cible MVP
+### Coverage Détaillé MVP
+
 ```bash
 npm test
-# ✅ Email Service (88% coverage)
-# ✅ SMS Service (85% coverage)
-# ✅ API Endpoints (90% coverage) 
-# ✅ Security Middleware (95% coverage)
-# ✅ Error Handling (82% coverage)
+# 📧 Notification Service - Tests Complets
+#
+# ✅ Tests de Santé du Service (4/4)
+# ✅ Tests d'Authentification API (3/3)
+# ✅ Tests Email de Confirmation (4/4)
+# ✅ Tests Email de Réinitialisation (3/3)
+# ✅ Tests SMS de Réinitialisation (3/3)
+# ✅ Tests Formulaire de Contact (8/8)
+# ✅ Tests Mailjet (2/2)
+# ✅ Tests de Validation (3/3)
+# ✅ Tests de Gestion d'Erreurs (3/3)
+# ✅ Tests de Performance (2/2)
+# ✅ Tests d'Intégration (2/2)
+# ✅ Tests Utilitaires (2/2)
+
 ```
 
-### Tests Critiques
+### Tests Critiques Implémentés
+
+#### 🔐 Sécurité
+
 ```javascript
-describe('📧 Email Notifications', () => {
-  test('Sends confirmation email with valid API key', async () => {
-    const response = await request(app)
-      .post('/api/email/confirm')
-      .set('x-api-key', 'test-valid-key')
-      .send({
-        email: 'test@example.com',
-        token: 'abc123'
-      });
-    
-    expect(response.status).toBe(200);
-    expect(response.body.success).toBe(true);
-  });
-
-  test('Rejects request without API key', async () => {
-    const response = await request(app)
-      .post('/api/email/confirm')
-      .send({
-        email: 'test@example.com', 
-        token: 'abc123'
-      });
-    
-    expect(response.status).toBe(403);
-    expect(response.body.error).toBe('API key requise');
-  });
-
-  test('Validates email format', async () => {
-    const response = await request(app)
-      .post('/api/email/confirm')
-      .set('x-api-key', 'test-valid-key')
-      .send({
-        email: 'invalid-email',
-        token: 'abc123'
-      });
-    
-    expect(response.status).toBe(400);
-    expect(response.body.error).toBe('Paramètres invalides');
+describe("🔐 Tests d'Authentification API", () => {
+  test("❌ Accès refusé sans API key", async () => {
+    const res = await request(app)
+      .post("/api/email/confirm")
+      .send({ email: "test@example.com", token: "tok-123" });
+    expect(res.statusCode).toBe(403);
+    expect(res.body.error).toBe("API key requise");
   });
 });
+```
 
-describe('📱 SMS Notifications', () => {
-  test('Sends SMS with Free Mobile provider', async () => {
-    const response = await request(app)
-      .post('/api/sms/reset')
-      .set('x-api-key', 'test-valid-key')
-      .send({
-        username: '12345678',
-        apiKey: 'test-api-key',
-        code: '123456'
-      });
-    
-    expect([200, 500]).toContain(response.status);
-    if (response.status === 200) {
-      expect(response.body.success).toBe(true);
-    }
+#### 📧 Fonctionnalités Email
+
+```javascript
+describe("📧 Tests Email de Confirmation", () => {
+  test("✅ Envoi email confirmation réussi", async () => {
+    const res = await request(app)
+      .post("/api/email/confirm")
+      .set("x-api-key", "test-valid-key")
+      .send({ email: "test@example.com", token: "tok-123" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      message: "Email de confirmation envoyé",
+    });
+  });
+});
+```
+
+#### 📮 Contact Form
+
+```javascript
+describe("📮 Tests Formulaire de Contact", () => {
+  const validContactData = {
+    name: "John Doe",
+    email: "john.doe@example.com",
+    subject: "Test de contact",
+    category: "info",
+    message: "Ceci est un message de test pour le formulaire de contact.",
+  };
+
+  test("✅ Envoi message contact réussi", async () => {
+    const res = await request(app)
+      .post("/api/contact/send")
+      .set("x-api-key", "test-valid-key")
+      .send(validContactData);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      message: expect.stringContaining("reçu et est en cours de traitement"),
+      messageId: expect.stringMatching(/^contact-\d+-[a-z0-9]+$/),
+      duration: expect.stringMatching(/^\d+ms$/),
+      status: "processing",
+    });
   });
 });
 ```
@@ -383,6 +518,8 @@ describe('📱 SMS Notifications', () => {
 ---
 
 ## 🐳 Déploiement Docker
+
+### Dockerfile Optimisé
 
 ```dockerfile
 FROM node:20-alpine
@@ -408,67 +545,21 @@ CMD ["npm", "run", "dev"]
 
 ---
 
-## 🔍 Validation RNCP39583
-
-### Critères Respectés
-
-| Critère RNCP | Implémentation | Status |
-|--------------|----------------|---------|
-| **C2.2.1 - Multi-Channel Architecture** | Email + SMS + templates | ✅ |
-| **C2.2.2 - Tests Notification** | Jest + mocks providers >85% | ✅ |
-| **C2.2.3 - Sécurité Communications** | API-Key + validation + logs | ✅ |
-| **C4.1.2 - Monitoring Notifications** | Métriques envois + providers | ✅ |
-| **C4.2.1 - Audit Communications** | Logs structurés + traçabilité | ✅ |
-| **C4.3.2 - Templates Versioning** | HTML templates + config | ✅ |
-
----
-
-## 📈 Optimisations & Limitations MVP
-
-### ✅ Optimisations Implémentées
-- **Multi-Provider Support** : Mailjet + Free Mobile avec fallback
-- **Templates Responsive** : HTML emails optimisés mobile
-- **API Security** : Protection API-Key pour inter-services
-- **Structured Logging** : Traçabilité complète envois/échecs
-- **Graceful Degradation** : Mode simulation si providers indisponibles
-
-### ⚠️ Limitations MVP
-- **Providers Limités** : Uniquement Mailjet + Free Mobile
-- **Templates Statiques** : Pas de templating dynamique avancé
-- **Queue System** : Envois synchrones (pas Redis Queue)
-- **Retry Logic** : Pas de retry automatique sur échec
-
----
-
-## 🚧 Roadmap Post-MVP
-
-### Phase 2 (Production)
-- [ ] **Queue System** : Redis Queue pour envois asynchrones
-- [ ] **Retry Logic** : Retry automatique avec backoff exponentiel
-- [ ] **Template Engine** : Handlebars pour templates dynamiques
-- [ ] **Multi-Provider** : SendGrid, Twilio SMS backup
-- [ ] **Delivery Tracking** : Webhooks de statut livraison
-
-### Phase 3 (Enterprise)
-- [ ] **Push Notifications** : Firebase Cloud Messaging
-- [ ] **In-App Notifications** : WebSocket real-time
-- [ ] **Advanced Templates** : A/B testing templates
-- [ ] **Analytics** : Métriques ouverture/clic emails
-- [ ] **Internationalization** : Templates multi-langues
-
----
-
 ## 🐛 Troubleshooting
 
-### Erreurs Courantes
+### Erreurs Configuration
+
 ```bash
 # Mailjet non configuré
-Warning: Mailjet non configuré - les emails seront simulés
-# Solution: Définir MAILJET_API_KEY + MAILJET_API_SECRET
+Warning: ❌ Mailjet non configuré - les emails seront simulés
+# Solution: Définir MAILJET_API_KEY + MAILJET_API_SECRET dans .env
 
-# Free Mobile echec SMS
+# Free Mobile échec SMS
 Error: API Free Mobile retourne: 403
-# Solution: Vérifier FREE_SMS_USER + FREE_SMS_PASS + service activé
+# Solution:
+# 1. Vérifier FREE_SMS_USER + FREE_SMS_PASS
+# 2. Activer service SMS dans espace Free Mobile
+# 3. Vérifier quota SMS non dépassé
 
 # API Key manquante
 Error: API key requise
@@ -479,47 +570,30 @@ Error: Template rendering failed
 # Solution: Vérifier FRONTEND_URL pour liens de confirmation
 ```
 
-### Debug Providers
+### Erreurs Runtime
+
 ```bash
-# Test email confirmation
-curl -X POST http://localhost:5005/api/email/confirm \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-api-key" \
-  -d '{"email":"test@example.com","token":"abc123"}'
+# Timeout Mailjet
+Error: Timeout envoi email après 30000ms
+# Solutions:
+# 1. Vérifier connectivité réseau
+# 2. Augmenter timeout dans emailService.js
+# 3. Vérifier status Mailjet (status.mailjet.com)
 
-# Test SMS reset
-curl -X POST http://localhost:5005/api/sms/reset \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: your-api-key" \
-  -d '{"username":"12345678","apiKey":"your-key","code":"123456"}'
+# Contact form validation
+Error: Données invalides - Le nom doit contenir au moins 2 caractères
+# Solution: Vérifier format des données avant envoi
 
-# Vérifier health providers
-curl http://localhost:5005/health | jq '.providers'
-```
-
-### Logs Debugging
-```bash
-# Suivre logs en temps réel
-tail -f logs/notification-service/combined.log
-
-# Filtrer logs email
-grep "type.*email" logs/notification-service/combined.log
-
-# Filtrer logs SMS
-grep "type.*sms" logs/notification-service/combined.log
+# Memory leak détecté
+Warning: Possible EventEmitter memory leak detected
+# Solution: Vérifier cleanup des listeners dans tests
 ```
 
 ---
 
-## 👥 Contexte Projet
+## 👥 Contexte Projet & Équipe
 
 **Projet M2** - Développement d'un MVP microservices pour plateforme de roadtrip  
 **Certification** : RNCP39583 - Expert en Développement Logiciel  
 **Technologies** : Node.js, Mailjet, Free Mobile, Nodemailer, Express, Prometheus  
 **Auteur** : Inès GERVAIS
-
----
-
-## 📄 Licence
-
-MIT License - Projet académique M2

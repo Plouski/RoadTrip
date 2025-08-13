@@ -1,54 +1,116 @@
 import { AuthService } from "./auth-service";
 
-const API_GATEWAY_URL = process.env.NEXT_PUBLIC_DB_SERVICE_URL || "https://api.example.com";
+const API_URL =
+  process.env.NEXT_PUBLIC_DB_SERVICE_URL || "http://localhost:5002";
 
-export const AdminService = {
-  /**
-   * Vérifie si l'utilisateur actuel est administrateur
-   */
-  async isAdmin() {
-    try {
-      const user = await AuthService.getProfile();
-      return user?.role?.toLowerCase() === "admin";
-    } catch (error) {
-      console.error("Erreur dans isAdmin:", error);
-      return false;
+type RequestOpts = RequestInit & {
+  auth?: boolean;
+  json?: boolean;
+};
+
+const toCurrencySymbol = (c?: string) => {
+  if (!c) return "EUR";
+  const up = c.toUpperCase();
+  return up === "EUR"
+    ? "EUR"
+    : up === "USD"
+    ? "USD"
+    : up === "GBP"
+    ? "GBP"
+    : up;
+};
+
+const normalizeBudgetForApi = (b: any) => {
+  if (b && typeof b === "object" && "amount" in b) {
+    return {
+      amount: Number(b.amount) || 0,
+      currency: toCurrencySymbol(b.currency),
+    };
+  }
+  const amount =
+    typeof b === "number"
+      ? b
+      : typeof b === "string"
+      ? Number(b.replace(/[^\d.]/g, "")) || 0
+      : 0;
+  return { amount, currency: "EUR" };
+};
+
+class AdminAPI {
+  private base = API_URL;
+
+  private async request<T = any>(
+    path: string,
+    opts: RequestOpts = {}
+  ): Promise<T> {
+    const { auth = true, json, headers: hdrs, ...rest } = opts;
+
+    const headers: Record<string, string> = {};
+
+    if (auth) {
+      const authHeaders = await AuthService.getAuthHeaders();
+      Object.assign(headers, authHeaders);
     }
-  },
 
-  /**
-   * Récupère les statistiques générales du système
-   */
-  async getStats() {
-    const headers = await AuthService.getAuthHeaders();
+    const shouldSendJson =
+      typeof json === "boolean" ? json : typeof rest.body !== "undefined";
+    if (shouldSendJson) {
+      headers["Content-Type"] =
+        (hdrs as Record<string, string>)?.["Content-Type"] ||
+        "application/json";
+    }
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/admin/stats`, {
-      method: "GET",
-      headers,
+    const res = await fetch(`${this.base}${path}`, {
+      ...rest,
+      headers: { ...headers, ...(hdrs as any) },
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || "Impossible de récupérer les statistiques");
+    let payload: any = null;
+    try {
+      payload = await res.json();
+    } catch {}
+
+    if (!res.ok) {
+      const msg =
+        payload?.message ||
+        (res.status === 401
+          ? "Session expirée, veuillez vous reconnecter"
+          : res.status === 403
+          ? "Vous n'avez pas les autorisations nécessaires"
+          : `Erreur ${res.status}`);
+      throw new Error(msg);
     }
 
-    const data = await response.json();
-    console.log("Réponse brute stats:", data);
+    return payload as T;
+  }
 
-    if (data.success && data.stats) {
-      const backendStats = data.stats;
+  //  Auth / Role
+  isAdmin = async (): Promise<boolean> => {
+    try {
+      const user = await AuthService.getProfile();
+      return user?.role?.toLowerCase?.() === "admin";
+    } catch {
+      return false;
+    }
+  };
 
+  //  Dashboard
+  getStats = async () => {
+    const data = await this.request<any>("/api/admin/stats", { method: "GET" });
+
+    if (data?.success && data?.stats) {
+      const s = data.stats;
       return {
-        totalUsers: backendStats.users?.total || 0,
-        activeUsers: backendStats.users?.verified || 0,
-        totalRoadtrips: backendStats.trips?.total || 0,
-        publishedRoadtrips: backendStats.trips?.published || 0,
-        totalLikes: backendStats.engagement?.favorites || 0,
-        totalComments: backendStats.engagement?.ai_messages || 0,
+        totalUsers: s.users?.total ?? 0,
+        activeUsers: s.users?.verified ?? 0,
+        totalRoadtrips: s.trips?.total ?? 0,
+        publishedRoadtrips: s.trips?.published ?? 0,
+        totalLikes: s.engagement?.favorites ?? 0,
+        totalComments: s.engagement?.ai_messages ?? 0,
       };
     }
 
-    console.warn("Structure de réponse inattendue:", data);
+    // fallback structure
     return {
       totalUsers: 0,
       activeUsers: 0,
@@ -57,354 +119,120 @@ export const AdminService = {
       totalLikes: 0,
       totalComments: 0,
     };
-  },
+  };
 
-  /**
-   * Récupère les utilisateurs récents
-   */
-  async getRecentUsers() {
-    const headers = await AuthService.getAuthHeaders();
+  getRecentUsers = () =>
+    this.request("/api/admin/users/recent", { method: "GET" });
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/admin/users/recent`, {
-      method: "GET",
-      headers,
-    });
+  getRecentRoadtrips = () =>
+    this.request("/api/admin/roadtrips/recent", { method: "GET" });
 
-    if (!response.ok) {
-      throw new Error("Impossible de récupérer les derniers utilisateurs");
-    }
+  //  Users
+  getUsers = (page = 1, limit = 10, search = "") =>
+    this.request(
+      `/api/admin/users?page=${page}&limit=${limit}&search=${encodeURIComponent(
+        search
+      )}`,
+      { method: "GET" }
+    );
 
-    const data = await response.json();
-    console.log("Réponse brute recent users:", data);
-    return data;
-  },
+  getUserById = (userId: string) =>
+    this.request(`/api/admin/users/${userId}`, { method: "GET" });
 
-  /**
-   * Récupère les roadtrips récents
-   */
-  async getRecentRoadtrips() {
-    const headers = await AuthService.getAuthHeaders();
+  getUserSubscription = async (userId: string) => {
+    const data = await this.request<any>(
+      `/api/admin/users/${userId}/subscription`,
+      { method: "GET" }
+    );
+    return data?.subscription;
+  };
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/admin/roadtrips/recent`, {
-      method: "GET",
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error("Impossible de récupérer les derniers roadtrips");
-    }
-
-    const data = await response.json();
-    console.log("Réponse brute recent roadtrips:", data);
-    return data;
-  },
-
-  /**
-   * Récupère la liste des utilisateurs avec pagination et recherche
-   */
-  async getUsers(page = 1, limit = 10, search = "") {
-    const headers = await AuthService.getAuthHeaders();
-    const url = `${API_GATEWAY_URL}/api/admin/users?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || "Impossible de charger la liste des utilisateurs");
-    }
-
-    return await response.json();
-  },
-
-  /**
-   * Met à jour le statut d'un utilisateur (actif/inactif)
-   */
-  async updateUserStatus(userId, isVerified) {
-    try {
-      const headers = await AuthService.getAuthHeaders();
-
-      const response = await fetch(`${API_GATEWAY_URL}/api/admin/users/status/${userId}`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify({ isVerified }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Session expirée, veuillez vous reconnecter");
-        } else if (response.status === 403) {
-          throw new Error("Vous n'avez pas les autorisations nécessaires");
-        }
-
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Erreur lors de la mise à jour du statut de l'utilisateur");
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Erreur lors de la mise à jour du statut de l'utilisateur:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Récupère un utilisateur par ID
-   */
-  async getUserById(userId) {
-    const headers = await AuthService.getAuthHeaders();
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/admin/users/${userId}`, {
-      method: "GET",
-      headers,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Erreur lors de la récupération de l'utilisateur");
-    }
-
-    return await response.json();
-  },
-
-  /**
-   * Récupère l'abonnement d'un utilisateur
-   */
-  async getUserSubscription(userId) {
-    const headers = await AuthService.getAuthHeaders();
-    
-    const response = await fetch(`${API_GATEWAY_URL}/api/admin/users/${userId}/subscription`, {
-      method: "GET",
-      headers,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || "Impossible de récupérer l'abonnement");
-    }
-
-    const data = await response.json();
-    return data.subscription;
-  },
-
-  /**
-   * Met à jour un utilisateur
-   */
-  async updateUser(userId, userData) {
-    const headers = await AuthService.getAuthHeaders();
-
-    const response = await fetch(`${API_GATEWAY_URL}/api/admin/users/${userId}`, {
+  updateUserStatus = (userId: string, isVerified: boolean) =>
+    this.request(`/api/admin/users/status/${userId}`, {
       method: "PUT",
-      headers,
+      body: JSON.stringify({ isVerified }),
+    });
+
+  updateUser = (userId: string, userData: any) =>
+    this.request(`/api/admin/users/${userId}`, {
+      method: "PUT",
       body: JSON.stringify(userData),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Erreur lors de la mise à jour de l'utilisateur");
-    }
+  deleteUser = (userId: string) =>
+    this.request(`/api/admin/users/${userId}`, { method: "DELETE" });
 
-    return await response.json();
-  },
+  //  Roadtrips
+  getRoadtrips = (page = 1, limit = 10, search = "") =>
+    this.request(
+      `/api/admin/roadtrips?page=${page}&limit=${limit}&search=${encodeURIComponent(
+        search
+      )}`,
+      { method: "GET" }
+    );
 
-  /**
-   * Supprime un utilisateur
-   */
-  async deleteUser(userId) {
-    const headers = await AuthService.getAuthHeaders();
+  createRoadtrip = async (roadtripData: any) => {
+    const token = AuthService.getAuthToken();
+    if (!token)
+      throw new Error("Vous devez être connecté pour créer un roadtrip");
 
-    const response = await fetch(`${API_GATEWAY_URL}/api/admin/users/${userId}`, {
-      method: "DELETE",
-      headers,
+    const user = await AuthService.getProfile();
+    if (!user || user.role !== "admin")
+      throw new Error("Vous devez être administrateur pour créer un roadtrip");
+
+    const body = {
+      ...roadtripData,
+      budget: normalizeBudgetForApi(roadtripData.budget),
+      userId: user.id || user.userId,
+    };
+    return this.request("/api/admin/roadtrips", {
+      method: "POST",
+      body: JSON.stringify(body),
     });
+  };
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "Erreur lors de la suppression de l'utilisateur");
-    }
+  updateRoadtrip = async (id: string, roadtripData: any) => {
+    const token = AuthService.getAuthToken();
+    if (!token)
+      throw new Error("Vous devez être connecté pour modifier un roadtrip");
 
-    return await response.json();
-  },
+    const user = await AuthService.getProfile();
+    if (!user || user.role !== "admin")
+      throw new Error(
+        "Vous devez être administrateur pour modifier un roadtrip"
+      );
 
-  /**
-   * Récupère la liste des roadtrips avec pagination et recherche
-   */
-  async getRoadtrips(page = 1, limit = 10, search = "") {
-    const headers = await AuthService.getAuthHeaders();
-    const url = `${API_GATEWAY_URL}/api/admin/roadtrips?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`;
-
-    const response = await fetch(url, {
-      method: "GET",
-      headers,
+    const body = {
+      ...roadtripData,
+      budget: normalizeBudgetForApi(roadtripData.budget),
+      userId: user.id || user.userId,
+    };
+    return this.request(`/api/admin/roadtrips/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
     });
+  };
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || "Impossible de charger la liste des roadtrips");
-    }
+  deleteRoadtrip = async (id: string) => {
+    const token = AuthService.getAuthToken();
+    if (!token)
+      throw new Error("Vous devez être connecté pour supprimer un roadtrip");
 
-    return await response.json();
-  },
+    const user = await AuthService.getProfile();
+    if (!user || user.role !== "admin")
+      throw new Error(
+        "Vous devez être administrateur pour supprimer un roadtrip"
+      );
 
-  /**
-   * Crée un nouveau roadtrip
-   */
-  async createRoadtrip(roadtripData) {
-    try {
-      const token = AuthService.getAuthToken();
-      if (!token) {
-        throw new Error("Vous devez être connecté pour créer un roadtrip");
-      }
+    await this.request(`/api/admin/roadtrips/${id}`, { method: "DELETE" });
+    return true;
+  };
 
-      const user = await AuthService.getProfile();
-      if (!user || user.role !== "admin") {
-        throw new Error("Vous devez être administrateur pour créer un roadtrip");
-      }
+  updateRoadtripStatus = (id: string, isPublished: boolean) =>
+    this.request(`/api/admin/roadtrips/status/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPublished }),
+    });
+}
 
-      const dataToSend = {
-        ...roadtripData,
-        userId: user.id || user.userId,
-      };
-
-      const response = await fetch(`${API_GATEWAY_URL}/api/admin/roadtrips`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(dataToSend),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Erreur lors de la création du roadtrip");
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Erreur lors de la création du roadtrip:", error);
-      throw error;
-    }
-  },
-
-  /**
-   * Met à jour un roadtrip existant
-   */
-  async updateRoadtrip(id, roadtripData) {
-    try {
-      const token = AuthService.getAuthToken();
-      if (!token) {
-        throw new Error("Vous devez être connecté pour modifier un roadtrip");
-      }
-
-      const user = await AuthService.getProfile();
-      if (!user || user.role !== "admin") {
-        throw new Error("Vous devez être administrateur pour modifier un roadtrip");
-      }
-
-      const dataToSend = {
-        ...roadtripData,
-        userId: user.id || user.userId,
-      };
-
-      const response = await fetch(`${API_GATEWAY_URL}/api/admin/roadtrips/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(dataToSend),
-      });
-
-      if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error("Vous n'avez pas les droits pour mettre à jour ce roadtrip");
-        }
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Erreur lors de la mise à jour du roadtrip");
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error(`Erreur lors de la mise à jour du roadtrip ${id}:`, error);
-      throw error;
-    }
-  },
-
-  /**
-   * Supprime un roadtrip
-   */
-  async deleteRoadtrip(id) {
-    try {
-      const token = AuthService.getAuthToken();
-      if (!token) {
-        throw new Error("Vous devez être connecté pour supprimer un roadtrip");
-      }
-
-      const user = await AuthService.getProfile();
-      if (!user || user.role !== "admin") {
-        throw new Error("Vous devez être administrateur pour supprimer un roadtrip");
-      }
-
-      const response = await fetch(`${API_GATEWAY_URL}/api/admin/roadtrips/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error("Vous n'avez pas les droits pour supprimer ce roadtrip");
-        }
-        throw new Error("Erreur lors de la suppression du roadtrip");
-      }
-
-      return true;
-    } catch (error) {
-      console.error(`Erreur lors de la suppression du roadtrip ${id}:`, error);
-      throw error;
-    }
-  },
-
-  /**
-   * Met à jour le statut d'un roadtrip (publié/non publié)
-   */
-  async updateRoadtripStatus(id, isPublished) {
-    try {
-      const token = AuthService.getAuthToken();
-      if (!token) {
-        throw new Error("Non authentifié");
-      }
-
-      const response = await fetch(`${API_GATEWAY_URL}/api/admin/roadtrips/status/${id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ isPublished }),
-      });
-
-      console.log("CALL:", `${API_GATEWAY_URL}/api/admin/roadtrips/status/${id}`, { isPublished });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Session expirée, veuillez vous reconnecter");
-        } else if (response.status === 403) {
-          throw new Error("Vous n'avez pas les autorisations nécessaires");
-        }
-
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Erreur lors de la mise à jour du statut du roadtrip");
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error("Erreur lors de la mise à jour du statut du roadtrip:", error);
-      return { success: true };
-    }
-  },
-};
+export const AdminService = new AdminAPI();

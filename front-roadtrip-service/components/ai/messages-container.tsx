@@ -2,8 +2,8 @@
 "use client";
 
 import { forwardRef } from "react";
-import { MessageBubble } from "@/components/assistant/message-bubble";
-import { TypingIndicator } from "@/components/assistant/typing-indicator";
+import { MessageBubble } from "@/components/ai/message-bubble";
+import { TypingIndicator } from "@/components/ai/typing-indicator";
 import { MessageSquare } from "lucide-react";
 
 interface Message {
