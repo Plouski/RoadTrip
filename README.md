@@ -1,576 +1,450 @@
-# 🗺️ RoadTrip! - Écosystème Microservices Intelligent
+# 🌍 RoadTrip! - Plateforme de Voyage Microservices
 
-> **Plateforme complète de planification de voyages** avec intelligence artificielle, abonnements premium et monitoring avancé
+> **Écosystème complet de planification de voyages basé sur une architecture microservices**  
+> _Projet M2 - Certification RNCP39583 - Expert en Développement Logiciel_
 
-[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-8.0+-green.svg)](https://www.mongodb.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://docker.com/)
-[![Microservices](https://img.shields.io/badge/Architecture-Microservices-orange.svg)](https://microservices.io/)
+## 📋 Vue d'ensemble
 
-## 🎯 **Vue d'ensemble**
+RoadTrip! est une plateforme moderne de planification de voyages construite avec une architecture microservices. Elle permet aux utilisateurs de découvrir, planifier et partager leurs aventures de voyage grâce à l'intelligence artificielle.
 
-RoadTrip! est un écosystème microservices moderne pour la planification intelligente de voyages. Combinant IA générative, logique premium et monitoring professionnel, il offre une expérience utilisateur complète avec architecture scalable.
+### 🎯 Fonctionnalités principales
 
-### **🚀 Fonctionnalités principales**
-- 🤖 **IA générative** - Itinéraires personnalisés via OpenAI GPT-4o-mini
-- 🔐 **Authentification complète** - OAuth 2.0 (Google/Facebook) + JWT
-- 💰 **Abonnements premium** - Stripe avec logique de contenu intelligent
-- 📧 **Notifications multi-canal** - Emails (Mailjet) + SMS (Free Mobile)
-- 📊 **Monitoring enterprise** - Prometheus + Grafana + Loki
-- 🛡️ **Sécurité production** - Rate limiting + validation + CORS
+- **🤖 Assistant IA** : Génération d'itinéraires personnalisés avec météo intégrée
+- **🔐 Authentification OAuth** : Connexion Google/Facebook simplifiée
+- **💳 Abonnements Premium** : Accès aux fonctionnalités avancées via Stripe
+- **📧 Notifications Multi-Canal** : Emails et SMS transactionnels
+- **⭐ Système de Favoris** : Sauvegarde et partage d'itinéraires
+- **📊 Monitoring Complet** : Prometheus, Grafana, Loki pour l'observabilité
 
 ---
 
-## 🏗️ **Architecture Microservices**
+## 🏗 Architecture
 
-```mermaid
-graph TB
-    subgraph "🌐 Clients"
-        WEB[Web App]
-        MOBILE[Mobile App]
-        ADMIN[Admin Panel]
-    end
-    
-    subgraph "🔗 API Gateway"
-        NGINX[Nginx Load Balancer]
-    end
-    
-    subgraph "💾 Core Services"
-        DATA[Data Service<br/>:5002]
-        AUTH[Auth Service<br/>:5001]
-        AI[AI Service<br/>:5003]
-        PAY[Payment Service<br/>:5004]
-        NOTIF[Notification Service<br/>:5005]
-    end
-    
-    subgraph "📊 Monitoring Stack"
-        METRICS[Metrics Service<br/>:5006]
-        PROM[Prometheus<br/>:9090]
-        GRAF[Grafana<br/>:3100]
-        LOKI[Loki<br/>:3101]
-    end
-    
-    subgraph "🗄️ Data Layer"
-        MONGO[(MongoDB<br/>:27017)]
-    end
-    
-    subgraph "🔗 External APIs"
-        OPENAI[OpenAI API]
-        STRIPE[Stripe API]
-        MAILJET[Mailjet API]
-        SMS[Free Mobile API]
-    end
-    
-    WEB --> NGINX
-    MOBILE --> NGINX
-    ADMIN --> NGINX
-    
-    NGINX --> DATA
-    NGINX --> AUTH
-    NGINX --> AI
-    NGINX --> PAY
-    NGINX --> NOTIF
-    
-    DATA --> MONGO
-    PAY --> MONGO
-    AUTH --> MONGO
-    
-    AI --> OPENAI
-    PAY --> STRIPE
-    NOTIF --> MAILJET
-    NOTIF --> SMS
-    
-    DATA -.->|Logs| LOKI
-    AUTH -.->|Logs| LOKI
-    AI -.->|Logs| LOKI
-    PAY -.->|Logs| LOKI
-    NOTIF -.->|Logs| LOKI
-    
-    PROM -->|Scrape| DATA
-    PROM -->|Scrape| AUTH
-    PROM -->|Scrape| AI
-    PROM -->|Scrape| PAY
-    PROM -->|Scrape| NOTIF
-    
-    GRAF --> PROM
-    GRAF --> LOKI
+```
+Frontend (Next.js)          Monitoring Stack
+    :3000              ┌─────────────────────────┐
+       │               │ Prometheus     :9090    │
+       │               │ Grafana        :3100    │
+       │               │ Loki           :3101    │
+       │               │ Promtail                │
+       │               └─────────────────────────┘
+       │                          │
+       ▼                          ▼
+┌────────────────────────────────────────────────────────┐
+│              MICROSERVICES NETWORK                     │
+│                                                        │
+│ ┌─────────────┐ ┌─────────────┐ ┌────────────────────┐ │
+│ │auth-service │ │data-service │ │   ai-service       │ │
+│ │    :5001    │ │    :5002    │ │     :5003          │ │
+│ │    :9092    │ │    :9093    │ │     :9091          │ │
+│ └─────────────┘ └─────────────┘ └────────────────────┘ │
+│                                                        │
+│ ┌─────────────┐ ┌─────────────┐ ┌────────────────────┐ │
+│ │payment-svc  │ │notification-│ │  metrics-service   │ │
+│ │    :5004    │ │service :5005│ │     :5006          │ │
+│ │    :9095    │ │    :9094    │ │     :9096          │ │
+│ └─────────────┘ └─────────────┘ └────────────────────┘ │
+│                                                        │
+│                MongoDB :27017                          │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🚀 **Démarrage rapide**
+## 📋 Référence des Ports
 
-### **Prérequis**
-- Docker 20+ & Docker Compose
-- Node.js 20+ (développement local)
-- Comptes développeurs : OpenAI, Stripe, Mailjet
+| Service | Port Principal | Port Métriques | URL |
+|---------|---------------|----------------|-----|
+| Frontend | 3000 | - | http://localhost:3000 |
+| Auth Service | 5001 | 9092 | http://localhost:5001 |
+| Data Service | 5002 | 9093 | http://localhost:5002 |
+| AI Service | 5003 | 9091 | http://localhost:5003 |
+| Payment Service | 5004 | 9095 | http://localhost:5004 |
+| Notification Service | 5005 | 9094 | http://localhost:5005 |
+| Metrics Service | 5006 | 9096 | http://localhost:5006 |
+| **Monitoring** | | | |
+| Prometheus | 9090 | - | http://localhost:9090 |
+| Grafana | 3100 | - | http://localhost:3100 |
+| Loki | 3101 | - | http://localhost:3101 |
+| MongoDB | 27017 | - | mongodb://localhost:27017 |
 
-### **Installation complète**
+---
+
+## 🚀 Démarrage Rapide
+
+### Prérequis
+
+- **Docker & Docker Compose** (recommandé)
+- **Node.js 20+** (pour développement local)
+- **MongoDB** (local ou cloud)
+- **Comptes API** : OpenAI, Stripe, Mailjet, Free Mobile
+
+### Installation complète avec Docker
 
 ```bash
 # 1. Cloner le projet
-git clone <repo-url>
-cd roadtrip
+git clone <repository>
+cd Roadtrip
 
-# 2. Configuration environnement
+# 2. Configurer l'environnement global
 cp .env.example .env
-# ⚠️ OBLIGATOIRE: Configurer les clés API dans .env
+# Éditer .env avec vos clés API
 
-# 3. Démarrage complet (Docker)
+# 3. Lancer tous les services
 docker-compose up -d
 
-# 4. Vérifier le statut
-docker-compose ps
+# 5. Vérifier que tous les services sont UP
+curl -s http://localhost:5006/api/services/status
 ```
 
-### **Variables d'environnement critiques**
+### Accès aux interfaces
+
+- **Frontend** : http://localhost:3000
+- **Grafana** : http://localhost:3100 (admin/admin123)
+- **Prometheus** : http://localhost:9090
+- **Metrics Dashboard** : http://localhost:5006/api/dashboard
+
+---
+
+## 🔧 Services
+
+### 🔐 Auth Service (Port: 5001)
+**Responsabilité** : Authentification et autorisation
+
+- OAuth Google/Facebook avec Passport.js
+- Génération et validation JWT (access + refresh tokens)
+- Sessions sécurisées pour le flow OAuth
+- Redirections frontend automatiques
+
+**API Principales :**
+- `GET /auth/oauth/google` - Démarrer OAuth Google
+- `GET /auth/oauth/facebook` - Démarrer OAuth Facebook
+- `POST /auth/logout` - Déconnexion
+- `GET /providers` - Providers disponibles
+
+### 🗂 Data Service (Port: 5002)
+**Responsabilité** : Gestion des données métier
+
+- CRUD Utilisateurs avec profils complets
+- Gestion des Roadtrips (publics/premium)
+- Système de favoris utilisateur
+- Historique des messages IA
+- Administration (stats, gestion utilisateurs/contenus)
+
+**API Principales :**
+- `POST /api/auth/register` - Inscription
+- `GET /api/roadtrips` - Liste des voyages
+- `POST /api/favorites/toggle/:tripId` - Gérer favoris
+- `GET /api/admin/stats` - Statistiques admin
+
+### 🤖 AI Service (Port: 5003)
+**Responsabilité** : Intelligence artificielle
+
+- Génération d'itinéraires via OpenAI GPT-4
+- Enrichissement météo (Open-Meteo)
+- Cache intelligent des réponses
+- Fallback local si API indisponible
+- Historique des conversations
+
+**API Principales :**
+- `POST /ask` - Générer un itinéraire IA
+- `POST /save` - Sauvegarder conversation
+- `GET /history` - Historique utilisateur
+- `DELETE /conversation/:id` - Supprimer conversation
+
+### 💳 Payment Service (Port: 5004)
+**Responsabilité** : Abonnements et paiements
+
+- Intégration Stripe Checkout complète
+- Gestion abonnements (mensuel/annuel)
+- Webhooks Stripe (paiements, annulations)
+- Système de remboursement
+- Changement de plans
+
+**API Principales :**
+- `POST /subscription/checkout` - Créer session paiement
+- `GET /subscription/current` - Abonnement actuel
+- `PUT /subscription/change-plan` - Changer de plan
+- `DELETE /subscription/cancel` - Annuler abonnement
+
+### 📧 Notification Service (Port: 5005)
+**Responsabilité** : Communications
+
+- Emails transactionnels (Mailjet)
+- SMS (Free Mobile API)
+- Templates HTML responsives
+- Formulaire de contact
+- Notifications système
+
+**API Principales :**
+- `POST /api/email/confirm` - Email confirmation
+- `POST /api/email/reset` - Email reset password
+- `POST /api/sms/reset` - SMS code reset
+- `POST /api/contact/send` - Formulaire contact
+
+### 📊 Metrics Service (Port: 5006)
+**Responsabilité** : Observabilité
+
+- Agrégation métriques Prometheus
+- Dashboard JSON en temps réel
+- Health checks centralisés
+- Logs centralisés (Loki/Promtail)
+- APIs d'administration monitoring
+
+**API Principales :**
+- `GET /api/dashboard` - Dashboard JSON
+- `GET /api/services/status` - Statut services
+- `GET /metrics` - Métriques Prometheus
+- `GET /health` - Santé globale
+
+### 🌐 Frontend (Port: 3000)
+**Responsabilité** : Interface utilisateur
+
+- Application Next.js 13+ (App Router)
+- UI moderne (Tailwind + shadcn/ui)
+- Pages publiques et espaces protégés
+- Intégration complète avec tous les microservices
+- Responsive design
+
+**Pages Principales :**
+- `/` - Accueil
+- `/explorer` - Catalogue voyages
+- `/ai` - Assistant IA (premium)
+- `/premium` - Abonnements
+- `/admin` - Administration
+
+---
+
+## 🔒 Sécurité
+
+### Authentification
+- **JWT** avec access/refresh tokens
+- **OAuth 2.0** Google/Facebook
+- **Sessions** sécurisées (httpOnly, sameSite)
+
+### Autorisation
+- **Rôles** : user, premium, admin
+- **Middlewares** de protection par service
+- **API Keys** pour communication inter-services
+
+### Sécurité Infrastructure
+- **CORS** configuré strictement
+- **Rate Limiting** sur endpoints sensibles
+- **Helmet** pour headers sécurisés
+- **Validation** des données entrantes
+
+---
+
+## 📊 Monitoring & Observabilité
+
+### Stack de Monitoring
+- **Prometheus** : Collecte des métriques
+- **Grafana** : Visualisation et dashboards
+- **Loki** : Agrégation des logs
+- **Promtail** : Agent de collecte logs
+
+### Métriques Exposées
+- Latence HTTP par service/route
+- Taux d'erreur et codes de statut
+- Connexions actives
+- Santé des bases de données
+- Performances des services externes
+
+### Health Checks
+Chaque service expose :
+- `/health` - Statut global + dépendances
+- `/vitals` - Métriques système (CPU, mémoire)
+- `/metrics` - Métriques Prometheus
+- `/ping` - Test basique de connectivité
+
+---
+
+## 🐳 Docker
+
+### Développement avec Docker
 
 ```bash
-# 🔥 OBLIGATOIRES
-MONGODB_URI=mongodb://localhost:27017/roadtrip
-JWT_SECRET=your-ultra-secure-jwt-secret-64-chars-minimum
-JWT_REFRESH_SECRET=your-ultra-secure-refresh-secret-64-chars
+# Lancer stack complète
+docker-compose up -d
 
-# 🤖 Intelligence Artificielle
-OPENAI_API_KEY=sk-your-openai-key-here
+# Logs en temps réel
+docker-compose logs -f
 
-# 💳 Paiements Stripe
-STRIPE_SECRET_KEY=sk_test_your-stripe-key
-STRIPE_WEBHOOK_SECRET=whsec_your-webhook-secret
-STRIPE_PRICE_MONTHLY_ID=price_monthly_id
-STRIPE_PRICE_ANNUAL_ID=price_annual_id
+# Restart un service
+docker-compose restart ai-service
 
-# 📧 Notifications
-MAILJET_API_KEY=your-mailjet-api-key
-MAILJET_API_SECRET=your-mailjet-secret
-FREE_MOBILE_USERNAME=your-free-mobile-user
-FREE_MOBILE_API_KEY=your-free-mobile-key
+# Arrêter tous les services
+docker-compose down
+```
 
-# 🔐 OAuth
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-secret
-FACEBOOK_CLIENT_ID=your-facebook-app-id
-FACEBOOK_CLIENT_SECRET=your-facebook-secret
+### Variables d'Environnement
 
-# 🔗 URLs
+Copier `.env.example` vers `.env` et configurer :
+
+```env
+# VARIABLES GLOBALES
+NODE_ENV=development
 FRONTEND_URL=http://localhost:3000
+CLIENT_URL=http://localhost:3000
+CORS_ORIGIN=http://localhost:3000
+
+# DATABASE CONFIGURATION
+MONGODB_URI=mongodb://admin:password123@mongodb:27017/roadtrip?authSource=admin
+
+# JWT CONFIGURATION (PARTAGÉ ENTRE TOUS LES SERVICES)
+JWT_SECRET=roadTripTopSecret2024ChangeInProduction
+JWT_REFRESH_SECRET=refreshTopsecret2024ChangeInProduction
+JWT_EXPIRES_IN=24h
+JWT_REFRESH_EXPIRES_IN=7d
+
+# SESSION CONFIGURATION
+SESSION_SECRET=super-secret-session-key-change-in-production
+
+# SERVICES INTEGRATION
+DATA_SERVICE_URL=http://localhost:5002
+NOTIFICATION_SERVICE_URL=http://localhost:5005
+NOTIFICATION_API_KEY=test-api-key-123
+
+# OAUTH CONFIGURATION
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:5001/auth/oauth/google/callback
+
+# Facebook OAuth
+FACEBOOK_CLIENT_ID=your-facebook-app-id
+FACEBOOK_CLIENT_SECRET=your-facebook-app-secret
+FACEBOOK_CALLBACK_URL=http://localhost:5001/auth/oauth/facebook/callback
+
+# EXTERNAL APIS
+
+# OpenAI
+OPENAI_API_KEY=sk-your-openai-api-key-here
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+STRIPE_PRICE_MONTHLY_ID=price_your_monthly_price_id
+STRIPE_PRICE_ANNUAL_ID=price_your_annual_price_id
+
+# Email (Mailjet)
+MAILJET_API_KEY=your-mailjet-api-key
+MAILJET_API_SECRET=your-mailjet-secret-key
+EMAIL_FROM_NAME=RoadTrip! Support
+EMAIL_FROM_ADDRESS=noreply@roadtrip.fr
+
+# SMS (Free Mobile)
+FREE_MOBILE_USERNAME=12345678
+FREE_MOBILE_API_KEY=your-free-mobile-api-key
+
+# MONITORING
+GRAFANA_API_KEY=your-grafana-api-key
 ```
 
-### **Accès aux services**
-
-Une fois démarré, les services sont disponibles sur :
-
-| Service | URL | Description |
-|---------|-----|-------------|
-| 🌐 **Frontend** | http://localhost:3000 | Interface utilisateur React |
-| 🔐 **Auth** | http://localhost:5001 | Authentification OAuth + JWT |
-| 💾 **Data** | http://localhost:5002 | API centrale + Admin panel |
-| 🤖 **AI** | http://localhost:5003 | Génération d'itinéraires IA |
-| 💳 **Payment** | http://localhost:5004 | Abonnements Stripe |
-| 📧 **Notification** | http://localhost:5005 | Emails + SMS |
-| 📊 **Metrics** | http://localhost:5006 | API métriques |
-| 📈 **Grafana** | http://localhost:3100 | Dashboards (admin/admin123) |
-| 🔍 **Prometheus** | http://localhost:9090 | Métriques brutes |
-
 ---
 
-## 🏢 **Services Détaillés**
+## 🖥 Développement Local (sans Docker)
 
-### **🔐 Auth Service** - *Authentification sécurisée*
-- **OAuth 2.0** complet (Google, Facebook)
-- **JWT multi-source** (Header, Cookie, Query)
-- **Sessions sécurisées** avec fallback MongoDB
-- **Rate limiting** différencié par endpoint
+### Démarrage
 
-**📖 [Documentation complète](./auth-service/README.md)**
-
-### **💾 Data Service** - *Hub central intelligent*
-- **API Gateway** pour tous les microservices
-- **Logique premium** avec content gating automatique
-- **Admin panel RGPD** avec dashboard professionnel
-- **Authentification multi-source** et gestion des rôles
-
-**📖 [Documentation complète](./data-service/README.md)**
-
-### **🤖 AI Service** - *Intelligence artificielle*
-- **OpenAI GPT-4o-mini** pour génération d'itinéraires
-- **Cache intelligent** avec optimisation des performances
-- **Intégration météo** Open-Meteo temps réel
-- **Fallback robuste** en cas d'indisponibilité
-
-**📖 [Documentation complète](./ai-service/README.md)**
-
-### **💳 Payment Service** - *Abonnements premium*
-- **Stripe intégration** complète (Checkout + Webhooks)
-- **Plans flexibles** (mensuel 5€, annuel 45€)
-- **Gestion cycle de vie** (upgrade, cancel, refund)
-- **Proratisation automatique** des changements de plan
-
-**📖 [Documentation complète](./paiement-service/README.md)**
-
-### **📧 Notification Service** - *Communications multi-canal*
-- **Emails transactionnels** via Mailjet avec templates
-- **SMS sécurisés** via Free Mobile API
-- **Mode simulation** pour développement sans config
-- **Templates responsives** avec branding cohérent
-
-**📖 [Documentation complète](./notification-service/README.md)**
-
-### **📊 Metrics Service** - *Monitoring enterprise*
-- **Prometheus** pour collecte métriques temps réel
-- **Grafana** dashboards professionnels pré-configurés
-- **Loki** pour logs centralisés multi-services
-- **Alertes intelligentes** avec intégrations Slack
-
-**📖 [Documentation complète](./metrics-service/README.md)**
-
----
-
-## 💰 **Logique Métier Premium**
-
-### **Modèle économique**
-- **Freemium** : Accès gratuit avec contenu limité
-- **Premium Monthly** : 5€/mois - Accès complet
-- **Premium Annual** : 45€/an - Économie de 25%
-
-### **Content Gating intelligent**
-```javascript
-// Logique automatique côté API
-if (trip.isPremium && userRole !== 'premium') {
-  tripData.itinerary = truncateContent(tripData.itinerary);
-  tripData.premiumNotice = {
-    message: "Contenu réservé aux utilisateurs premium",
-    callToAction: "S'abonner pour débloquer",
-    missingFeatures: ["Itinéraire complet", "Carte interactive", "IA avancée"]
-  };
-}
-```
-
-### **Fonctionnalités premium**
-- ✅ **Itinéraires illimités** générés par IA
-- ✅ **Recommandations avancées** personnalisées
-- ✅ **Cartes interactives** détaillées
-- ✅ **Export PDF** des itinéraires
-- ✅ **Support prioritaire** via chat
-
----
-
-## 🛡️ **Sécurité Enterprise**
-
-### **Authentification multicouches**
-- **JWT** : Access (1h) + Refresh (7d) tokens
-- **OAuth 2.0** : Google + Facebook avec OpenID Connect
-- **Sessions** : HttpOnly + Secure + SameSite
-- **Rate limiting** : Différencié par endpoint et utilisateur
-
-### **Protection des données**
-- **RGPD compliant** : Suppression cascade complète
-- **Validation stricte** : Express-validator sur tous endpoints
-- **Headers sécurisés** : Helmet.js + CSP custom
-- **Chiffrement** : bcrypt + salt pour passwords
-
-### **Monitoring sécurité**
 ```bash
-# Métriques de sécurité Prometheus
-auth_service_oauth_attempts_total{provider="google",success="false"}
-data_service_premium_content_access_total{user_role="user",blocked="true"}
-notification_service_email_sent_total{type="security_alert"}
+cd data-service && npm run dev        # Terminal 1
+cd auth-service && npm run dev        # Terminal 2  
+cd notification-service && npm run dev # Terminal 3
+cd ai-service && npm run dev          # Terminal 4
+cd paiement-service && npm run dev    # Terminal 5
+cd metrics-service && npm run dev     # Terminal 6
+cd front-roadtrip-service && npm run dev # Terminal 7
 ```
+
+### Avantages du développement local
+- **Debug facile** : Logs directement dans le terminal
+- **Rechargement rapide** : Pas de rebuild Docker
+- **Flexibilité** : Démarrer seulement les services nécessaires
+- **Performance** : Pas d'overhead Docker
+- **Tests unitaires** : Plus rapides en local
+
+### Standards de Code
+- **ESLint** + **Prettier** pour le formatage
+- **Conventional Commits** pour les messages Git
+- **Husky** pour les pre-commit hooks
+- **Jest** pour les tests unitaires
 
 ---
 
-## 📊 **Monitoring & Observabilité**
+## 🧪 Tests
 
-### **Stack de monitoring professionnel**
-- **Prometheus** : Collecte métriques (15s interval)
-- **Grafana** : 8 dashboards pré-configurés
-- **Loki** : Logs centralisés JSON structurés
-- **Promtail** : Agent collecte multi-services
+### Exécuter tous les tests
 
-### **Dashboards Grafana inclus**
-1. **🌐 Services Overview** - Vue globale santé
-2. **👥 User Analytics** - Inscriptions, authentifications
-3. **💰 Payment Analytics** - Conversions, abonnements
-4. **🤖 AI Performance** - Génération itinéraires, cache
-5. **📧 Communications** - Emails/SMS envoyés
-6. **🔒 Security Dashboard** - Tentatives suspectes
-7. **⚡ Performance** - Temps de réponse, throughput
-8. **🏗️ Infrastructure** - CPU, RAM, connexions DB
-
-### **Métriques business critiques**
 ```bash
-# Performance
-roadtrip_http_request_duration_seconds{service="ai-service",route="/api/ai/ask"}
+# Tests unitaires par service
+# Dans chaque service
+cd auth-service && npm test
+cd data-service && npm test
+cd ai-service && npm test
+cd paiement-service && npm test
+cd notification-service && npm test
+cd metrics-service && npm test
 
-# Business
-roadtrip_user_registrations_total{source="oauth"}
-roadtrip_premium_subscriptions_total{plan="monthly"}
-roadtrip_ai_itineraries_generated_total
-
-# Santé services
-roadtrip_service_health{service_name="data-service",status="healthy"}
+# Avec coverage
+npm test -- --coverage
 ```
+
+### Types de Tests
+- **Unitaires** : Logique métier de chaque service
+- **Intégration** : APIs entre services
+- **E2E** : Parcours utilisateur complets
+- **Load** : Performance sous charge
 
 ---
 
-## 🧪 **Tests & Qualité**
+## 🐛 Troubleshooting
 
-### **Suite de tests complète**
-```bash
-# Tests tous services
-npm run test:all
-
-# Tests avec coverage
-npm run test:coverage
-
-# Tests integration
-npm run test:integration
-
-# Tests end-to-end
-npm run test:e2e
-```
-
-### **Coverage objectifs**
-- **Auth Service** : >90% (sécurité critique)
-- **Data Service** : >85% (logique métier)
-- **AI Service** : >80% (intégrations externes)
-- **Payment Service** : >95% (transactions critiques)
-- **Notification Service** : >80% (communications)
-
-### **Tests automatisés**
-- ✅ **Unit tests** : Jest pour chaque service
-- ✅ **Integration tests** : APIs inter-services
-- ✅ **Security tests** : Validation endpoints
-- ✅ **Performance tests** : Load testing avec Artillery
-- ✅ **E2E tests** : Playwright pour parcours utilisateur
-
----
-
-## 🐳 **Déploiement Production**
-
-### **Docker optimisé**
-```bash
-# Build production
-docker-compose -f docker-compose.prod.yml build
-
-# Déploiement avec secrets
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-### **Configuration production**
-```bash
-# Variables critiques production
-NODE_ENV=production
-JWT_SECRET=crypto-strong-64-chars-minimum
-MONGODB_URI=mongodb+srv://cluster.mongodb.net/roadtrip
-CORS_ORIGIN=https://roadtrip.app
-RATE_LIMIT_ENABLED=true
-
-# SSL/TLS obligatoire
-FORCE_HTTPS=true
-SECURE_COOKIES=true
-```
-
-### **Checklist déploiement**
-- ✅ **Secrets** : Variables env chiffrées
-- ✅ **SSL/TLS** : Certificats valides
-- ✅ **Base données** : MongoDB Atlas ou équivalent
-- ✅ **Monitoring** : Alertes configurées
-- ✅ **Backup** : Sauvegarde automatique
-- ✅ **CDN** : Assets statiques optimisés
-
----
-
-## 🚨 **Troubleshooting**
-
-### **Problèmes courants**
+### Problèmes Fréquents
 
 | Problème | Cause | Solution |
 |----------|-------|----------|
-| `❌ Services ne démarrent pas` | Docker/variables env | Vérifier `docker-compose ps` et `.env` |
-| `🔐 JWT invalide` | Secret différent entre services | Unifier `JWT_SECRET` dans tous services |
-| `💾 MongoDB connection failed` | Base non accessible | Vérifier `MONGODB_URI` et réseau Docker |
-| `🤖 OpenAI timeout` | Clé API ou quota | Vérifier `OPENAI_API_KEY` et billing |
-| `📧 Emails non envoyés` | Config Mailjet | Tester `MAILJET_API_KEY` et domaine |
+| Services ne démarrent pas | Ports occupés | `docker-compose down && docker-compose up -d` |
+| 401 sur toutes les APIs | JWT invalide | Vérifier `JWT_SECRET` dans tous les .env |
+| IA indisponible | OpenAI API down/quota | Vérifier `OPENAI_API_KEY` et crédits |
+| Emails non envoyés | Mailjet mal configuré | Vérifier `MAILJET_API_KEY/SECRET` |
+| Paiements échouent | Stripe mal configuré | Vérifier clés Stripe et webhook |
+| Prometheus vide | Services pas scrapés | Vérifier `prometheus.yml` et réseau |
 
-### **Commandes de diagnostic**
+### Health Checks Rapides
 
 ```bash
-# Status global
-docker-compose ps
+# Vérifier tous les services
+for port in 5001 5002 5003 5004 5005 5006; do
+  echo "Service port $port:"
+  curl -s http://localhost:$port/health | jq '.status // "unknown"'
+done
 
-# Logs en temps réel
-docker-compose logs -f [service-name]
-
-# Health checks
-curl http://localhost:5002/health  # Data Service
-curl http://localhost:5001/health  # Auth Service
-
-# Test connectivité MongoDB
-docker exec -it mongodb mongosh
+# Dashboard complet
+curl -s http://localhost:5006/api/dashboard | jq
 
 # Métriques Prometheus
-curl http://localhost:9090/api/v1/targets
-
-# Dashboard Grafana
-open http://localhost:3100
-```
-
-### **Reset complet**
-```bash
-# Arrêt et nettoyage
-docker-compose down -v
-
-# Suppression images
-docker-compose down --rmi all
-
-# Redémarrage propre
-docker-compose up -d --build
+curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].health'
 ```
 
 ---
 
-## 🔧 **Développement Local**
+## 🤝 Contribution
 
-### **Setup développeur**
-```bash
-# Installation globale
-npm install -g nodemon concurrently
+### Workflow de Développement
 
-# Développement service spécifique
-cd ai-service
-npm run dev
-
-# Développement multiple services
-npm run dev:all
-```
-
-### **Hot reload activé**
-- **Nodemon** pour auto-restart
-- **Volumes Docker** pour sync code
-- **Logs temps réel** dans terminaux séparés
-
-### **Base de données locale**
-```bash
-# MongoDB local
-brew install mongodb/brew/mongodb-community
-brew services start mongodb-community
-
-# MongoDB Compass (GUI)
-open mongodb://localhost:27017
-```
+1. **Fork** le repository
+2. **Créer** une branche feature (`git checkout -b feature/amazing-feature`)
+3. **Commit** avec conventional commits (`git commit -m 'feat: add amazing feature'`)
+4. **Push** vers la branche (`git push origin feature/amazing-feature`)
+5. **Ouvrir** une Pull Request
 
 ---
 
-## 🤝 **Contribution**
+## 👥 Contexte
 
-### **Standards de développement**
-- 🔐 **Security-first** : Validation + sanitization obligatoires
-- 🧪 **Tests** : Coverage minimal requis par service
-- 📊 **Logs** : Structured logging avec contexte métier
-- 🔗 **Integration** : Health checks pour services externes
-- 📝 **Documentation** : README détaillé par modification
-
-### **Workflow Git**
-```bash
-# 1. Fork et clone
-git clone https://github.com/your-username/roadtrip.git
-
-# 2. Branch feature
-git checkout -b feature/nouvelle-fonctionnalite
-
-# 3. Développement + tests
-npm test
-
-# 4. Commit descriptif
-git commit -m "feat(ai-service): amélioration génération itinéraires"
-
-# 5. Push et Pull Request
-git push origin feature/nouvelle-fonctionnalite
-```
-
-### **Convention commits**
-- `feat:` - Nouvelle fonctionnalité
-- `fix:` - Correction de bug
-- `perf:` - Amélioration de performance
-- `security:` - Correction de sécurité
-- `docs:` - Documentation uniquement
-
----
-
-## 📚 **Documentation Technique**
-
-### **APIs & Spécifications**
-- 🔗 **OpenAPI 3.0** : Specs disponibles sur `/api-docs`
-- 📊 **Prometheus** : [Métriques customs](http://localhost:9090/graph)
-- 🔐 **JWT** : [RFC 7519](https://tools.ietf.org/html/rfc7519)
-- 💳 **Stripe** : [Webhooks guide](https://stripe.com/docs/webhooks)
-
-### **Architecture & Patterns**
-- 🏗️ **Microservices** : [Patterns & Best Practices](https://microservices.io/)
-- 🔄 **Event-driven** : Webhooks + Message queues
-- 🛡️ **Security** : [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- 📊 **Monitoring** : [SRE Handbook](https://sre.google/sre-book/)
-
-### **Technologies Stack**
-- **Backend** : Node.js 20, Express.js, MongoDB
-- **IA** : OpenAI GPT-4o-mini, Open-Meteo
-- **Paiements** : Stripe Checkout + Webhooks
-- **Auth** : OAuth 2.0, OpenID Connect, JWT
-- **Monitoring** : Prometheus, Grafana, Loki
-- **DevOps** : Docker, Docker Compose
-
----
-
-## 📊 **Métriques Performance**
-
-### **SLA Objectifs**
-- **Disponibilité** : 99.9% (8h40 downtime/an max)
-- **Temps de réponse** : <500ms (95e percentile)
-- **Throughput** : >1000 req/min par service
-- **Recovery Time** : <5 minutes après incident
-
-### **Monitoring automatique**
-- **Health checks** : Toutes les 30s
-- **Alertes Slack** : Incidents critiques
-- **Logs centralisés** : Retention 30 jours
-- **Métriques temps réel** : Dashboard live
-
----
-
-## 📄 **Licence & Certifications**
-
-**ISC License** - Projet étudiant M2 Expert en Développement Logiciel
-
-### **Conformité**
-- ✅ **RGPD** : Gestion données personnelles
-- ✅ **OAuth 2.0** : RFC 6749 compliant
-- ✅ **OpenID Connect** : Validation tokens
-- ✅ **PCI DSS** : Paiements sécurisés via Stripe
-
----
-
-## 👤 **Auteur**
-
-**Inès GERVAIS** - Expert en Développement Logiciel  
-🎓 YNOV Campus - Promotion 2025  
-📧 Contact : [ines.gervais@ynov.com](mailto:ines.gervais@ynov.com)
-
----
-
-## 🎯 **Objectifs Pédagogiques**
-
-*Ce projet RoadTrip! démontre la maîtrise complète de l'architecture microservices moderne dans le cadre de la certification **RNCP39583 - Expert en Développement Logiciel***
-
-### **Compétences validées**
-- 🏗️ **Architecture microservices** scalable et résiliente
-- 🔐 **Sécurité enterprise** (OAuth, JWT, validation)
-- 🤖 **Intégration IA** générative (OpenAI)
-- 💳 **Fintech** (Stripe, abonnements, webhooks)
-- 📊 **Monitoring professionnel** (Prometheus, Grafana)
-- 🐳 **DevOps moderne** (Docker, CI/CD)
-- 🧪 **Qualité logicielle** (tests, coverage, sécurité)
-
----
-
-*🗺️ **RoadTrip! - Where Intelligence Meets Adventure** - Écosystème microservices pour la planification de voyages nouvelle génération.*
+**Auteur** : Inès GERVAIS  
+**Projet** : M2 - Architecture Microservices  
+**Certification** : RNCP39583 - Expert en Développement Logiciel  
+**Technologies** : Node.js, Express, Next.js, MongoDB, Docker, Kubernetes, Prometheus

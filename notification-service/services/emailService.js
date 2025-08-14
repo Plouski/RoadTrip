@@ -206,7 +206,7 @@ const EmailService = {
 
     try {
       const mailOptions = {
-        from: from || `"${process.env.EMAIL_FROM_NAME || 'ROADTRIP'}" <${process.env.EMAIL_FROM_ADDRESS || 'noreply@roadtrip.fr'}>`,
+        from: from || `"${process.env.EMAIL_FROM_NAME || 'RoadTrip! Support'}" <${process.env.EMAIL_FROM_ADDRESS || 'noreply@roadtrip.fr'}>`,
         to: Array.isArray(to) ? to.join(", ") : to,
         subject,
         html

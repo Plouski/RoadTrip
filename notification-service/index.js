@@ -15,7 +15,7 @@ const {
 
 const SERVICE_NAME = "notification-service";
 const PORT = parseInt(process.env.PORT || "5005", 10);
-const METRICS_PORT = parseInt(process.env.METRICS_PORT || "9005", 10);
+const METRICS_PORT = parseInt(process.env.METRICS_PORT || "9090", 10);
 
 /* App */
 const app = express();

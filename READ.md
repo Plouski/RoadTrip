@@ -4,12 +4,12 @@ pour les metrics : surveiller l'etat de santé et le temps de réponse pas reque
 stripe listen --forward-to localhost:5004/webhook
 
 
-Auth Service : ok
+Auth Service :
 Notification Service : ok
-AI Service : ok
-Paiement Service : ok 
+AI Service :
+Paiement Service : ok
 Data Service :
-Metric Service : ok
+Metric Service :
 Front Service :
 
 a faire avant de finaliser le projet :

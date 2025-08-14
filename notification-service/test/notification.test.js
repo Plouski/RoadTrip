@@ -1,12 +1,9 @@
-// __tests__/notification-service.test.js - Tests complets
-
 process.env.NODE_ENV = "test";
 process.env.NOTIFICATION_API_KEY = "test-valid-key";
 process.env.CONTACT_RECEIVE_EMAIL = "support@roadtrip.com";
 
 const request = require("supertest");
 
-// Mock des services
 jest.mock("../services/emailService", () => ({
   sendConfirmationEmail: jest.fn().mockResolvedValue({ 
     messageId: "msg-123", 
@@ -50,7 +47,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     jest.clearAllMocks();
   });
 
-  // ===== TESTS DE BASE =====
+  //  TESTS DE BASE 
   describe("🏥 Tests de Santé du Service", () => {
     test("✅ Health check fonctionne", async () => {
       const res = await request(app).get("/health");
@@ -95,7 +92,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     });
   });
 
-  // ===== TESTS D'AUTHENTIFICATION =====
+  //  TESTS D'AUTHENTIFICATION 
   describe("🔐 Tests d'Authentification API", () => {
     test("❌ Accès refusé sans API key", async () => {
       const res = await request(app)
@@ -123,7 +120,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     });
   });
 
-  // ===== TESTS EMAIL CONFIRMATION =====
+  //  TESTS EMAIL CONFIRMATION 
   describe("📧 Tests Email de Confirmation", () => {
     test("✅ Envoi email confirmation réussi", async () => {
       const res = await request(app)
@@ -169,7 +166,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     });
   });
 
-  // ===== TESTS EMAIL RESET =====
+  //  TESTS EMAIL RESET 
   describe("🔄 Tests Email de Réinitialisation", () => {
     test("✅ Envoi email reset réussi", async () => {
       const res = await request(app)
@@ -205,7 +202,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     });
   });
 
-  // ===== TESTS SMS RESET =====
+  //  TESTS SMS RESET 
   describe("📱 Tests SMS de Réinitialisation", () => {
     test("✅ Envoi SMS reset réussi", async () => {
       const res = await request(app)
@@ -234,14 +231,14 @@ describe("📧 Notification Service - Tests Complets", () => {
       const res = await request(app)
         .post("/api/sms/reset")
         .set("x-api-key", "test-valid-key")
-        .send({ username: "12345678" }); // manque apiKey et code
+        .send({ username: "12345678" });
       
       expect(res.statusCode).toBe(400);
       expect(res.body.error).toBe("Paramètres invalides");
     });
   });
 
-  // ===== TESTS CONTACT (NOUVEAUX) =====
+  //  TESTS CONTACT
   describe("📮 Tests Formulaire de Contact", () => {
     const validContactData = {
       name: "John Doe",
@@ -348,7 +345,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     });
   });
 
-  // ===== TESTS DE MAILJET =====
+  //  TESTS DE MAILJET 
   describe("🧪 Tests Mailjet", () => {
     test("✅ Test connexion Mailjet", async () => {
       const res = await request(app)
@@ -372,9 +369,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     });
   });
 
-  // Dans votre fichier de test, remplacez la section "Tests de Validation" par :
-
-  // ===== TESTS DE VALIDATION =====
+  //  TESTS DE VALIDATION 
   describe("✅ Tests de Validation", () => {
     test("❌ Validation email - formats invalides", async () => {
       const invalidEmails = [
@@ -392,10 +387,7 @@ describe("📧 Notification Service - Tests Complets", () => {
           .set("x-api-key", "test-valid-key")
           .send({ email, token: "tok-123" });
         
-        // Le service valide côté serveur et retourne 400 pour emails invalides
         if (res.statusCode === 200) {
-          // Si le mock renvoie 200, on vérifie que l'email était techniquement valide selon notre regex
-          // Notre regex est plus permissive que prévu, donc on ajuste le test
           console.log(`Email "${email}" passé la validation - regex plus permissive`);
           continue;
         }
@@ -425,11 +417,11 @@ describe("📧 Notification Service - Tests Complets", () => {
 
     test("❌ Validation stricte - emails vraiment invalides", async () => {
       const trulyInvalidEmails = [
-        "",           // vide
-        "   ",        // espaces
-        "invalid",    // pas d'@
-        "@",          // juste @
-        "@domain.com" // pas de partie locale
+        "",
+        "   ",
+        "invalid",
+        "@",
+        "@domain.com"
       ];
 
       for (const email of trulyInvalidEmails) {
@@ -444,7 +436,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     });
   });
 
-  // ===== TESTS D'ERREURS =====
+  //  TESTS D'ERREURS 
   describe("❌ Tests de Gestion d'Erreurs", () => {
     test("❌ Route inexistante retourne 404", async () => {
       const res = await request(app).get("/route/inexistante");
@@ -468,7 +460,7 @@ describe("📧 Notification Service - Tests Complets", () => {
     });
   });
 
-  // ===== TESTS DE PERFORMANCE =====
+  //  TESTS DE PERFORMANCE 
   describe("⚡ Tests de Performance", () => {
     test("✅ Réponse rapide health check", async () => {
       const start = Date.now();
@@ -476,7 +468,7 @@ describe("📧 Notification Service - Tests Complets", () => {
       const duration = Date.now() - start;
       
       expect(res.statusCode).toBe(200);
-      expect(duration).toBeLessThan(100); // Moins de 100ms
+      expect(duration).toBeLessThan(100);
     });
 
     test("✅ Réponse immédiate contact", async () => {
@@ -493,14 +485,13 @@ describe("📧 Notification Service - Tests Complets", () => {
       const duration = Date.now() - start;
       
       expect(res.statusCode).toBe(200);
-      expect(duration).toBeLessThan(500); // Moins de 500ms pour réponse immédiate
+      expect(duration).toBeLessThan(500);
     });
   });
 
-  // ===== TESTS D'INTÉGRATION =====
+  //  TESTS D'INTÉGRATION 
   describe("🔗 Tests d'Intégration", () => {
     test("✅ Flux complet email confirmation", async () => {
-      // Test du flux complet
       const email = "integration@test.com";
       const token = "integration-token-123";
 
@@ -512,7 +503,6 @@ describe("📧 Notification Service - Tests Complets", () => {
       expect(res.statusCode).toBe(200);
       expect(res.body.success).toBe(true);
 
-      // Vérifier que le service a été appelé
       const EmailService = require("../services/emailService");
       expect(EmailService.sendConfirmationEmail).toHaveBeenCalledWith(email, token);
     });
@@ -537,16 +527,13 @@ describe("📧 Notification Service - Tests Complets", () => {
         status: "processing"
       });
 
-      // Attendre un peu pour le traitement asynchrone
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Vérifier que les services ont été appelés (après process.nextTick)
-      // Note: En test, le process.nextTick peut ne pas s'exécuter immédiatement
     });
   });
 });
 
-// ===== TESTS UTILITAIRES =====
+//  TESTS UTILITAIRES 
 describe("🛠️ Tests Utilitaires", () => {
   test("✅ Variables d'environnement de test", () => {
     expect(process.env.NODE_ENV).toBe("test");

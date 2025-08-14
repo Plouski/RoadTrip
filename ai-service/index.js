@@ -11,7 +11,7 @@ const errorHandler = require("./middlewares/errorHandler");
 
 const app = express();
 const PORT = process.env.PORT || 5003;
-const METRICS_PORT = process.env.METRICS_PORT || 9003;
+const METRICS_PORT = process.env.METRICS_PORT || 9090;
 const SERVICE_NAME = "ai-service";
 
 logger.info(`🔥 Lancement du ${SERVICE_NAME}...`, { port: PORT });

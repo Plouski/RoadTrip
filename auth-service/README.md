@@ -1,36 +1,41 @@
-# 🔐 Auth Service - ROADTRIP MVP
+# 🔐 Auth Service - RoadTrip! 
 
-> **Microservice d'Authentification OAuth 2.0 sécurisé pour l'écosystème ROADTRIP**  
-> *Projet M2 - MVP Microservices - Certification RNCP39583*
+> **Passerelle d’authentification & OAuth (Google/Facebook) pour l'écosystème RoadTrip!**  
+> _Projet M2 -  Microservices - Certification RNCP39583_
 
 ## 📋 Vue d'ensemble
 
-Service Node.js implémentant **OAuth 2.0 / OpenID Connect** avec Google et Facebook, gestion JWT sécurisée, fallback MongoDB et monitoring Prometheus spécialisé sécurité.
+Service **Node.js/Express** avec **Passport** (Google & Facebook) qui :
+- gère les **logins OAuth** et renvoie des **JWT** (access + refresh),
+- maintient une **session** pour le flow OAuth (server-side),
+- expose **/health /vitals /metrics /providers /ping**,
+- publie des **métriques Prometheus** et des logs structurés,
+- se connecte à **MongoDB**.
 
-### 🎯 Fonctionnalités MVP
+---
 
-- ✅ **OAuth 2.0 Multi-Provider** : Google + Facebook avec OpenID Connect
-- ✅ **JWT Sécurisé** : Génération/validation tokens avec refresh automatique
-- ✅ **Fallback Robuste** : MongoDB local si data-service indisponible
-- ✅ **Sécurité OWASP** : Protection CSRF, rate limiting, Helmet CSP
-- ✅ **Session Management** : Sessions sécurisées avec cookies httpOnly
-- ✅ **Monitoring Sécurité** : Métriques dédiées + alertes sécurité
-- ✅ **Audit Trail** : Logs sécurisés pour toutes les tentatives auth
+## 💡 Points forts
+
+- OAuth 2.0 Google & Facebook (Passport).
+- Réponses JSON pour clients API ou redirections front prêtes à l’emploi.
+- Helmet + CSP, Rate limiting (global + endpoints OAuth), sessions sécurisées. 
+- Prometheus: latence, compteurs, connexions actives, santé DB.
+- Fallback Mongo si le data-service ne répond pas.
 
 ---
 
 ## 🚀 Installation & Démarrage
 
 ### Prérequis
+
 ```bash
 Node.js 20+
-npm ou yarn
-MongoDB (optionnel - fallback)
-Google OAuth credentials
-Facebook OAuth credentials
+MongoDB (local/cloud)
+Identifiants OAuth Google & Facebook
 ```
 
 ### Configuration
+
 ```bash
 # Cloner et installer
 git clone <repo>
@@ -42,43 +47,45 @@ cp .env.example .env
 ```
 
 ### Variables d'environnement
+
 ```env
+# Service
+NODE_ENV=development
 SERVICE_NAME=auth-service
 PORT=5001
-NODE_ENV=development
-LOG_LEVEL=debug
-ENABLE_FILE_LOGGING=true
+LOG_LEVEL=info
+ENABLE_FILE_LOGGING=false
 
-# Data Service
-DATA_SERVICE_URL=http://localhost:5002
+# Frontend
+FRONTEND_URL=http://localhost:3000
 
-# MongoDB Fallback
-MONGODB_URI=mongodb://localhost:27017/roadtrip
+# Sessions (nécessaire au flow OAuth)
+SESSION_SECRET=super-secret-session-key
 
-# JWT Configuration
-JWT_SECRET=your-super-secure-secret
-JWT_EXPIRES_IN=1h
-JWT_REFRESH_EXPIRES_IN=7d
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017/roadtrip_auth
 
-# Session Security
-SESSION_SECRET=your-session-secret
+# JWT
+JWT_SECRET=your_access_secret
 
 # CORS
 CORS_ORIGIN=http://localhost:3000
-FRONTEND_URL=http://localhost:3000
 
-# Google OAuth
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
+# OAuth Google
+GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
 GOOGLE_CALLBACK_URL=http://localhost:5001/auth/oauth/google/callback
 
-# Facebook OAuth
-FACEBOOK_CLIENT_ID=your-facebook-app-id
-FACEBOOK_CLIENT_SECRET=your-facebook-app-secret
+# OAuth Facebook
+FACEBOOK_CLIENT_ID=xxxxxxxxxxxxxxx
+FACEBOOK_CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxx
 FACEBOOK_CALLBACK_URL=http://localhost:5001/auth/oauth/facebook/callback
+
+METRICS_PORT=9090
 ```
 
 ### Lancement
+
 ```bash
 # Développement
 npm run dev
@@ -88,399 +95,162 @@ npm start
 
 # Tests avec coverage
 npm test
+
 ```
 
 ---
 
 ## 📡 API Endpoints
 
-### 🔐 Authentification OAuth
+### 🔧 Système (routes/systemRoutes.js)
 
-#### Initiation Google OAuth
-```http
-GET /auth/oauth/google
-# Redirige vers Google OAuth avec scopes : profile, email
-```
-
-#### Callback Google OAuth
-```http
-GET /auth/oauth/google/callback?code=xxx&state=xxx
-# Traite le retour Google et génère JWT
-```
-
-#### Initiation Facebook OAuth
-```http
-GET /auth/oauth/facebook
-# Redirige vers Facebook OAuth avec scopes : email, public_profile
-```
-
-#### Callback Facebook OAuth
-```http
-GET /auth/oauth/facebook/callback?code=xxx&state=xxx
-# Traite le retour Facebook et génère JWT
-```
-
-**Réponse OAuth Success (API Client) :**
-```json
-{
-  "message": "Authentification OAuth réussie",
-  "user": {
-    "id": "507f1f77bcf86cd799439011",
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "role": "user",
-    "avatar": null
-  },
-  "tokens": {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  },
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "requestId": "auth-service-12345"
-}
-```
-
-**Réponse OAuth Success (Web Client) :**
-```http
-302 Redirect
-Location: http://localhost:3000/oauth-callback?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-### 🔓 Session Management
-```http
-# Déconnexion
-POST /auth/logout
-# Détruit la session et clear les cookies
-
-# Information providers disponibles
-GET /providers
-```
-
-**Réponse /providers :**
+- GET /metrics : Métriques Prometheus (content-type exposé par register.contentType).
+- GET /health : État du service + config active (Mongo, providers), taux d’erreur & de succès OAuth.
+Renvoie 200 (healthy) ou 503 (degraded). Met à jour la gauge Prometheus.
+- GET /vitals : Uptime, mémoire, CPU, statut running.
+- GET /providers : Liste des providers disponibles selon l’ENV :
 ```json
 {
   "service": "auth-service",
-  "availableProviders": ["google", "facebook"],
+  "availableProviders": ["google","facebook"],
   "providers": {
-    "google": {
-      "available": true,
-      "url": "/auth/oauth/google",
-      "callback": "http://localhost:5001/auth/oauth/google/callback"
-    },
-    "facebook": {
-      "available": true,
-      "url": "/auth/oauth/facebook", 
-      "callback": "http://localhost:5001/auth/oauth/facebook/callback"
-    }
+    "google": { "available": true, "url": "/auth/oauth/google", "callback": "..." },
+    "facebook": { "available": true, "url": "/auth/oauth/facebook", "callback": "..." }
   },
   "totalAvailable": 2
 }
 ```
 
-### 🔧 Système & Monitoring
-```http
-GET /health          # État sécurisé du service
-GET /metrics         # Métriques Prometheus sécurité
-GET /vitals          # Statistiques système
+### 🔑 OAuth (routes/authRoutes.js)
+
+- GET /auth/oauth/google → démarre le flow OAuth Google (scope: profile,email)
+- GET /auth/oauth/google/callback
+- - En cas d’échec : redirige vers ${FRONTEND_URL}/auth?error=oauth_failed
+- - En cas de succès : AuthController.handleOAuthSuccess
+- - - si client API (Accept: application/json) → JSON :
+```json
+{
+  "message": "Authentification OAuth réussie",
+  "user": { "id": "...", "email": "...", "firstName": "...", "lastName": "...", "role": "...", "avatar": null },
+  "tokens": { "accessToken": "...", "refreshToken": "..." }
+}
 ```
+- - - sinon → redirection front : ${FRONTEND_URL}/oauth-callback?token=<accessToken>
+
+- GET /auth/oauth/facebook → démarre le flow OAuth Facebook (scope: email, public_profile)
+- GET /auth/oauth/facebook/callback → même comportement que Google
+
+- POST /auth/logout : Détruit la session, efface le cookie auth.session.id et renvoie { message: "Déconnexion réussie" }.
 
 ---
 
-## 🏗️ Architecture
+## 🔗 Intégrations
 
-### Structure Projet
+- **data-service** : lookup/création/mise à jour d’utilisateurs durant OAuth.
+Si indisponible → **fallback Mongo** (models/User.js) pour ne pas bloquer la connexion.
+
+- **frontend** : redirections vers
+- - /oauth-callback?token=... (succès)
+- - /auth?error=oauth_failed (échec)
+
+---
+
+## 🏗 Structure Projet
+
 ```
 auth-service/
-├── controllers/         # Logique métier
+├── app.js
+├── index.js
+├── metrics.js
+├── config/
+│   ├── jwtConfig.js
+│   └── passportConfig.js
+├── controllers/
 │   └── authController.js
-├── services/           # Services externes
-│   └── dataService.js  # Communication data-service
-├── config/            # Configuration sécurisée
-│   ├── jwtConfig.js    # Gestion JWT
-│   └── passportConfig.js # Stratégies OAuth
-├── middlewares/        # Middlewares Express
-│   ├── errorHandlers.js
-│   └── metricsLogger.js
-├── routes/            # Définition routes
-│   ├── authRoutes.js
-│   └── systemRoutes.js
-├── models/            # Modèles MongoDB fallback
-│   └── User.js
-├── loaders/           # Initialisation
+├── loaders/
 │   ├── mongo.js
 │   └── security.js
-├── utils/             # Utilitaires
+├── middlewares/
+│   ├── errorHandlers.js
+│   └── metricsLogger.js
+├── models/
+│   └── User.js
+├── routes/
+│   ├── authRoutes.js
+│   └── systemRoutes.js
+├── services/
+│   └── dataService.js 
+├── utils/
 │   └── logger.js
-├── tests/             # Tests sécurité
+├── tests/
 │   └── auth.test.js
-├── metrics.js         # Métriques Prometheus
-├── app.js             # Configuration Express
-└── index.js           # Point d'entrée
-```
-
-### Flow OAuth Sécurisé
-```mermaid
-graph LR
-    A[Client] --> B[/auth/oauth/google]
-    B --> C[Passport Strategy]
-    C --> D[Google OAuth]
-    D --> E[Callback Handler]
-    E --> F{Data Service?}
-    F -->|OK| G[Create/Update User]
-    F -->|KO| H[MongoDB Fallback]
-    G --> I[Generate JWT]
-    H --> I
-    I --> J[Security Logs]
-    J --> K[Return Tokens]
+├── Dockerfile
+├── package.json
+└── README.md
 ```
 
 ---
 
-## 🔒 Sécurité & Authentification
+## 🔒 Sécurité
 
-### OAuth 2.0 / OpenID Connect
-- **Providers** : Google, Facebook avec validation OpenID
-- **Scopes** : profile, email avec validation claims
-- **CSRF Protection** : State parameter obligatoire
-- **PKCE** : Proof Key for Code Exchange (si supporté)
-
-### JWT Security
-```javascript
-// Configuration JWT sécurisée
-const jwtConfig = {
-  algorithm: 'HS256',
-  expiresIn: '1h',
-  issuer: 'roadtrip-auth-service',
-  audience: 'roadtrip-clients'
-};
-
-// Validation claims OpenID
-const validateOpenIDToken = async (subjectId, profileId) => {
-  if (subjectId && subjectId !== profileId) {
-    throw new Error("Token OpenID invalide: subject mismatch");
-  }
-  return true;
-};
-```
-
-### Sécurité OWASP Top 10
-```javascript
-// Protection CSRF avec Helmet
-const helmetConfig = {
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      connectSrc: ["'self'", "https://accounts.google.com"],
-      frameSrc: ["https://accounts.google.com"]
-    }
-  }
-};
-
-// Rate Limiting anti-brute force
-const authRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 tentatives OAuth max
-  message: 'Trop de tentatives de connexion'
-});
-
-// Sessions sécurisées
-const sessionConfig = {
-  secret: process.env.SESSION_SECRET,
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
-  maxAge: 24 * 60 * 60 * 1000 // 24h
-};
-```
+- **Helmet + CSP** (autorise providers Google/Facebook).
+- **Rate limiting** global + **limiteur dédié OAuth**.
+- **Session** httpOnly ; secure & sameSite=strict en prod.
+- **JWT** signés avec JWT_SECRET (durées via JWT_EXPIRES_IN, JWT_REFRESH_EXPIRES_IN).
+- **Logs** de sécurité & d’audit (tentatives OAuth, userAgent, IP, requestId).
 
 ---
 
-## 📊 Monitoring & Métriques Sécurité
-
-### Métriques Prometheus Spécialisées
-- **Sécurité** : `auth_service_attempts_total` (tentatives par provider)
-- **Anomalies** : `auth_service_suspicious_activity_total` 
-- **Performance** : `auth_service_oauth_duration_seconds`
-- **Santé** : `auth_service_service_health_status`
-
-### Health Check Sécurisé
-```bash
-curl http://localhost:5001/health
-# {
-#   "status": "healthy",
-#   "service": "auth-service",
-#   "config": {
-#     "google": true,
-#     "facebook": true,
-#     "mongodb": true,
-#     "session": true
-#   },
-#   "security": {
-#     "helmet": true,
-#     "rateLimit": true,
-#     "httpsOnly": true,
-#     "secureSession": true
-#   }
-# }
-```
-
-### Alertes Sécurité Automatisées
-- **🚨 Critique** : >50 échecs auth/min (possible attaque brute force)
-- **⚠️ Warning** : Géolocalisation suspecte detected
-- **📊 Monitoring** : Ratio success/failure par provider
-- **🔍 Audit** : Tous les événements auth tracés avec anonymisation RGPD
+## 📈 Prometheus
+Exposé via /metrics. Métriques standards (préfixe normalisé, ex. auth_service_):
+- *_http_request_duration_seconds{method,route,status_code} (Histogram)
+- *_http_requests_total{method,route,status_code} (Counter)
+- *_active_connections (Gauge)
+- *_service_health_status{service_name} (Gauge)
+- *_database_status{database_type} (Gauge)
 
 ---
 
-## 🧪 Tests & Qualité
+## 🧪 Tests
 
-### Coverage Cible MVP Sécurité
 ```bash
 npm test
-# ✅ OAuth Flows (95% coverage)
-# ✅ JWT Validation (98% coverage)
-# ✅ Session Management (92% coverage) 
-# ✅ Rate Limiting (90% coverage)
-# ✅ Security Headers (100% coverage)
 ```
 
-### Tests Sécurité Critiques
-```javascript
-describe('OAuth Security Tests', () => {
-  test('Prevents CSRF attacks with state validation', async () => {
-    const maliciousState = 'malicious-state';
-    const response = await request(app)
-      .get('/auth/oauth/google/callback')
-      .query({ state: maliciousState, code: 'valid-code' });
-    
-    expect(response.status).toBe(400);
-    expect(response.body.error).toBe('Invalid state parameter');
-  });
+- Tester success/échec pour Google et Facebook (JSON vs redirection).
+- Vérifier /health, /vitals, /metrics, /providers.
+- Tester le rate limit OAuth (trop de tentatives → message dédié).
 
-  test('Rate limits OAuth attempts', async () => {
-    // Simulate multiple rapid requests
-    const requests = Array(12).fill().map(() => 
-      request(app).get('/auth/oauth/google')
-    );
-    
-    const responses = await Promise.all(requests);
-    const rateLimited = responses.filter(r => r.status === 429);
-    expect(rateLimited.length).toBeGreaterThan(0);
-  });
-});
+---
+
+## 🐳 Docker
+
+```bash
+# Build
+docker build -t auth-service .
+
+# Run
+docker run -p 5001:5001 --env-file .env auth-service
 ```
-
----
-
-## 🐳 Déploiement Docker
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-EXPOSE 5001 9001
-CMD ["npm", "run", "dev"]
-```
-
----
-
-## 🔍 Validation RNCP39583
-
-### Critères Respectés
-
-| Critère RNCP | Implémentation | Status |
-|--------------|----------------|---------|
-| **C2.2.1 - Prototype OAuth** | Multi-provider avec OpenID Connect | ✅ |
-| **C2.2.2 - Tests Sécurité** | Jest + security scenarios >95% | ✅ |
-| **C2.2.3 - Sécurité OWASP** | Top 10 + JWT + rate limiting | ✅ |
-| **C4.1.2 - Monitoring Sécurité** | Métriques + alertes temps réel | ✅ |
-| **C4.2.1 - Audit Trail** | Logs sécurisés + anonymisation | ✅ |
-| **C4.3.2 - Security Versioning** | CHANGELOG sécurité spécialisé | ✅ |
-
----
-
-## 📈 Optimisations & Limitations MVP
-
-### ✅ Optimisations Implémentées
-- **Fallback MongoDB** : Continuité si data-service down
-- **Dual Strategy** : Data-service primary + MongoDB secondary
-- **Rate Limiting** : Protection anti-brute force par IP
-- **Security Logging** : Audit trail complet avec anonymisation
-- **OpenID Validation** : Validation claims subject/audience
-
-### ⚠️ Limitations MVP
-- **Providers** : Uniquement Google + Facebook (pas GitHub/Apple)
-- **2FA** : Non implémenté (roadmap Phase 2)
-- **Session Store** : En mémoire (pas Redis distribuée)
-- **Geo-blocking** : Basique (pas de whitelist pays)
-
----
-
-## 🚧 Roadmap Post-MVP
-
-### Phase 2 (Production)
-- [ ] **Redis Sessions** : Sessions distribuées
-- [ ] **2FA/MFA** : Authentification multi-facteurs
-- [ ] **Social Providers** : GitHub, Apple, Microsoft
-- [ ] **SAML SSO** : Enterprise authentication
-- [ ] **Geo-IP Security** : Détection pays suspects
-
-### Phase 3 (Enterprise)
-- [ ] **LDAP/AD Integration** : Entreprise SSO
-- [ ] **Biometric Auth** : WebAuthn, FIDO2
-- [ ] **Device Trust** : Device fingerprinting
-- [ ] **Risk Scoring** : ML-based fraud detection
-- [ ] **Compliance** : SOC2, ISO27001 ready
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Erreurs Courantes
-```bash
-# Clés OAuth manquantes
-Error: OAuth providers not configured
-# Solution: Configurer GOOGLE_CLIENT_ID/SECRET + FACEBOOK
-
-# Data-service indisponible
-Warning: Data-service unavailable, using MongoDB fallback
-# Solution: Vérifier DATA_SERVICE_URL
-
-# Session secret non définie
-Warning: SESSION_SECRET non défini - clé par défaut
-# Solution: Définir SESSION_SECRET sécurisé
-
-# Callback URL mismatch
-Error: redirect_uri_mismatch
-# Solution: Vérifier URLs dans console OAuth providers
-```
-
-### Debug OAuth Flow
-```bash
-# Activer logs debug
-LOG_LEVEL=debug npm run dev
-
-# Tester providers disponibles
-curl http://localhost:5001/providers
-
-# Vérifier health complet
-curl http://localhost:5001/health
-```
+| Problème                               | Cause probable                      | Solution                                                                        |
+| -------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
+| Redirection vers `?error=oauth_failed` | Erreur provider / callback mismatch | Vérifie `*_CALLBACK_URL` côté provider + `.env`                                 |
+| `401/403` côté front après callback    | Token absent/expiré côté front      | Récupère le token depuis `/oauth-callback?token=...` ou utilise la réponse JSON |
+| `Mongo disconnected`                   | URI invalide ou DB down             | Vérifie `MONGODB_URI`                                                           |
+| `SESSION_SECRET non défini` (warning)  | Env manquante                       | Définir `SESSION_SECRET` (obligatoire en prod)                                  |
+| CORS bloqué                            | Origine non autorisée               | Ajuste `CORS_ORIGIN`                                                            |
+| `/metrics` vide                        | Pas de trafic                       | Effectuer quelques hits (OAuth, /health, etc.)                                  |
 
 ---
 
-## 👥 Contexte Projet
+## 👥 Contexte
 
-**Projet M2** - Développement d'un MVP microservices pour plateforme de roadtrip  
+**Projet M2** - Développement d'un microservice pour plateforme de roadtrip  
 **Certification** : RNCP39583 - Expert en Développement Logiciel  
-**Technologies** : Node.js, OAuth 2.0, JWT, Passport, MongoDB, Prometheus  
+**Technologies** : Node.js, Express, Passport, JWT, MongoDB, Prometheus, Docker
 **Auteur** : Inès GERVAIS
-
----
-
-## 📄 Licence
-
-MIT License - Projet académique M2

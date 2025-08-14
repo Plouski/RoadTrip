@@ -44,20 +44,7 @@ class JwtConfig {
 
   // ───────────── Vérifier un token ─────────────
   static verifyToken(token) {
-    try {
-      return jwt.verify(token, process.env.JWT_SECRET);
-    } catch (error) {
-      if (error.name === 'TokenExpiredError') {
-        logger.warn('⏳ Token expiré.');
-        throw new Error('Token expiré.');
-      }
-      if (error.name === 'JsonWebTokenError') {
-        logger.warn('❌ Token invalide.');
-        throw new Error('Token invalide.');
-      }
-      logger.error('💥 Erreur lors de la vérification du token :', error);
-      throw error;
-    }
+    return jwt.verify(token, process.env.JWT_SECRET);
   }
 }
 
