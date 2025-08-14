@@ -1,77 +1,47 @@
-# Paiement Service - ROADTRIP
+# 💳 Paiement Service - RoadTrip! 
 
-> Service de gestion des abonnements premium avec intégration Stripe pour l'écosystème ROADTRIP
+> **Microservice de gestion des abonnements et paiements Stripe**  
+> _Projet M2 -  Microservices - Certification RNCP39583_
 
-## Vue d'ensemble
+## 📋 Vue d'ensemble
 
-Le **Paiement Service** gère tous les aspects des abonnements premium de RoadTrip! :
-- Souscription d'abonnements (mensuel/annuel)
-- Intégration complète Stripe (Checkout, Webhooks)
-- Gestion des annulations et réactivations
-- Système de remboursement intelligent
-- Changement de plans avec proratisation
-- Monitoring et métriques temps réel
+Service Node.js/Express permettant de **gérer les abonnements (mensuel/annuel)**, **créer des paiements Stripe (Checkout)**, **réagir aux webhooks Stripe**, et **exposer des métriques Prometheus**. Sécurisé par **JWT** pour toutes les routes d’abonnement.
 
-## Architecture
+---
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      PAIEMENT SERVICE                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │ Controllers  │  │   Services   │  │ Middlewares  │           │
-│  │              │  │              │  │              │           │
-│  │ • Subscription│ │ • Integration│  │ • Auth       │           │
-│  │ • Webhook    │  │              │  │ • Validation │           │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
-│         │                 │                 │                   │
-│         └─────────────────┼─────────────────┘                   │
-│                           │                                     │
-│  ┌──────────────┐  ┌──────▼───────┐  ┌──────────────┐           │
-│  │    Models    │  │    Utils     │  │   Metrics    │           │
-│  │              │  │              │  │              │           │
-│  │ • User       │  │ • Logger     │  │ • Prometheus │           │
-│  │ • Subscription│ │ • Helpers    │  │ • Grafana    │           │
-│  └──────────────┘  └──────────────┘  └──────────────┘           │
-└─────────────────────────────────────────────────────────────────┘
+## 💡 Points forts
 
-                    ┌─────────────┐    ┌─────────────┐
-                    │   MongoDB   │    │   Stripe    │
-                    │ Port: 27017 │    │   Webhooks  │
-                    └─────────────┘    └─────────────┘
-```
+- **Abonnements premium** : checkout, changement de plan, annulation, réactivation  
+- **Remboursement early-stage** : logique d’éligibilité (≤ 7 jours)  
+- **Intégration Stripe complète** : checkout, subscription.updated, invoice.paid, etc.  
+- **Sécurité JWT** via middleware global sur les routes d’abonnement  
+- **Monitoring** : `/metrics`, `/health`, `/vitals` (Prometheus + health checks)  
+- **Logs Winston** structurés, niveaux configurables
 
-## Démarrage rapide
+---
+
+## 🚀 Installation & Démarrage
 
 ### Prérequis
-- **Node.js** 20+
-- **MongoDB** 6.0+
-- **Compte Stripe** (clés de test)
-
-### Installation
 
 ```bash
-# Cloner et naviguer
-git clone <repo-url>
-cd roadtrip/paiement-service
-
-# Installation des dépendances
-npm install
-
-# Configuration environnement
-cp .env.example .env
-# ⚠️ Configurer les variables Stripe et MongoDB
-
-# Démarrage développement
-npm run dev
-
-# Démarrage production
-npm start
+Node.js 20+
+MongoDB (MONGODB_URI)
+Compte Stripe (clé secrète + webhook secret)
 ```
 
-### Variables d'environnement requises
+### Configuration
+```bash
+# Cloner et installer
+git clone <repo>
+cd paiement-service
+npm install
 
+# Configurer l'environnement
+cp .env.example .env
+```
+
+### Variables d'environnement
 ```env
 # Application
 SERVICE_NAME=paiement-service
@@ -84,8 +54,6 @@ MONGODB_URI=
 
 # JWT
 JWT_SECRET=your_super_secret_jwt_key
-JWT_EXPIRES_IN=1h
-JWT_REFRESH_EXPIRES_IN=7d
 
 # Stripe
 STRIPE_SECRET_KEY=sk_test_...
@@ -96,346 +64,243 @@ STRIPE_PRICE_ANNUAL_ID=price_...
 # CORS
 CORS_ORIGINS=http://localhost:3000
 
-# Monitoring
+# Monitoring / Logs
 LOG_LEVEL=debug
 ENABLE_FILE_LOGGING=true
 ```
 
-## API Documentation
+### Lancement
+```bash
+# Développement
+npm run dev
 
-### Authentification
-Toutes les routes nécessitent un token JWT dans l'header `Authorization: Bearer <token>`
+# Production
+npm start
 
-### Endpoints principaux
+# Tests avec coverage
+npm test
 
-#### **Gestion des abonnements**
+# Health check
+curl http://localhost:5004/health
+```
 
+---
+
+## 📡 API Endpoints
+
+Toutes les routes **/subscription** sont protégées par **JWT**
+Header requis : Authorization: Bearer <token>
+
+### 🔧 Système (publics)
+
+- GET /health – état du service + dépendances (Mongo, Stripe)
+- GET /vitals – infos runtime (uptime, providers, webhooks, currencies)
+- GET /metrics – métriques Prometheus
+- GET /ping – ping simple
+
+#### 👤 Abonnements (protégés JWT)
+
+**Récupérer l’abonnement courant**
 ```http
 GET /subscription/current
-```
-Récupère l'abonnement de l'utilisateur connecté
-```json
-{
-  "plan": "monthly",
-  "status": "active",
-  "isActive": true,
-  "startDate": "2024-01-01T00:00:00Z",
-  "endDate": "2024-02-01T00:00:00Z",
-  "daysRemaining": 15
-}
+Authorization: Bearer <jwt>
 ```
 
+**Récupérer l’abonnement d’un utilisateur (admin ou soi-même)**
 ```http
 GET /subscription/user/:userId
-```
-Récupère l'abonnement d'un utilisateur (admin ou soi-même)
-
-```http
-POST /subscription/checkout
-```
-Crée une session Stripe Checkout
-```json
-{
-  "plan": "monthly" // ou "annual"
-}
-```
-→ Retourne `{ "url": "https://checkout.stripe.com/..." }`
-
-#### **Gestion du cycle de vie**
-
-```http
-DELETE /subscription/cancel
-```
-Programme l'annulation à la fin de période
-```json
-{
-  "success": true,
-  "cancelationType": "end_of_period",
-  "message": "Abonnement programmé pour annulation le 01/02/2024"
-}
+Authorization: Bearer <jwt>
 ```
 
-```http
-POST /subscription/reactivate
-```
-Réactive un abonnement annulé (si éligible)
-
-```http
-PUT /subscription/change-plan
-```
-Change le plan d'abonnement
-```json
-{
-  "newPlan": "annual" // ou "monthly"
-}
-```
-
-#### **Remboursements**
-
+**Vérifier l’éligibilité au remboursement (≤ 7 jours)**
 ```http
 GET /subscription/refund/eligibility
-```
-Vérifie l'éligibilité au remboursement (7 jours)
-```json
-{
-  "eligible": true,
-  "daysSinceStart": 3,
-  "daysRemainingForRefund": 4,
-  "reason": "Éligible au remboursement. Il vous reste 4 jour(s)"
-}
+Authorization: Bearer <jwt>
 ```
 
+**Demander un remboursement immédiat**
 ```http
 POST /subscription/refund
-```
-Demande un remboursement immédiat
-```json
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
 {
-  "reason": "Ne correspond pas à mes attentes"
+  "reason": "Je me suis trompé de plan"
 }
 ```
 
-#### **Webhooks Stripe**
+**Annuler à la fin de la période**
+```http
+DELETE /subscription/cancel
+Authorization: Bearer <jwt>
+```
 
+**Réactiver un abonnement**
+```http
+POST /subscription/reactivate
+Authorization: Bearer <jwt>
+```
+
+**Changer de plan (mensuel ↔ annuel)**
+```http
+PUT /subscription/change-plan
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "newPlan": "monthly"  // or "annual"
+}
+```
+
+**Créer une session Stripe Checkout**
+```http
+POST /subscription/checkout
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "plan": "annual"  // or "monthly"
+}
+```
+
+**Réponse**
+```json
+{ "url": "https://checkout.stripe.com/c/session_xyz" }
+```
+
+### 🔗 Webhooks Stripe
+
+**Important** : l’endpoint /webhook doit recevoir le **body brut (raw)** pour que Stripe puisse vérifier la signature.
+Configure le middleware comme ceci :
+```js
+app.post('/webhook', bodyParser.raw({ type: 'application/json' }), webhookController.handleStripeWebhook);
+```
+
+#### Webhook principal Stripe
 ```http
 POST /webhook
-```
-Endpoint sécurisé pour les webhooks Stripe
-- Vérifie la signature Stripe
-- Traite les événements : checkout.session.completed, subscription.updated, etc.
-
-### Monitoring
-
-```http
-GET /health
-```
-État de santé du service et dépendances
-```json
-{
-  "status": "healthy",
-  "dependencies": {
-    "mongodb": "healthy",
-    "stripe": "configured"
-  }
-}
+Content-Type: application/json
+Stripe-Signature: t=timestamp,v1=signature
 ```
 
-```http
-GET /vitals
+**Événements traités :**
+- `checkout.session.completed` → Activation abonnement
+- `customer.subscription.updated` → Mise à jour statut
+- `customer.subscription.deleted` → Suppression abonnement
+- `invoice.paid` → Paiement réussi
+- `invoice.payment_failed` → Échec paiement
+
+---
+
+## 🏗 Structure Projet
+
 ```
-Informations détaillées du service
-```json
-{
-  "service": "paiement-service",
-  "uptime": 3600,
-  "payment": {
-    "providers": { "stripe": true },
-    "currencies_supported": ["EUR", "USD"]
-  }
-}
-```
-
-```http
-GET /metrics
-```
-Métriques Prometheus (format text/plain)
-
-```http
-GET /ping
-```
-Test de connectivité simple
-
-## Configuration Stripe
-
-### 1. Créer les produits dans Stripe Dashboard
-
-```javascript
-// Plan mensuel
-Product: "ROADTRIP Premium Monthly"
-Price: 5 EUR/mois
-ID: price_monthly_xxxxx
-
-// Plan annuel  
-Product: "ROADTRIP Premium Annual"
-Price: 45 EUR/an
-ID: price_annual_xxxxx
-```
-
-### 2. Configurer les webhooks
-
-**URL**: `https://votre-domaine.com/webhook`
-
-**Événements à écouter**:
-- `checkout.session.completed`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.paid`
-- `invoice.payment_failed`
-
-### 3. Récupérer la clé webhook
-```bash
-stripe listen --forward-to localhost:5004/webhook
-# Copier la clé whsec_... dans STRIPE_WEBHOOK_SECRET
+paiement-service/
+├── app.js
+├── index.js
+├── metrics.js
+│
+├── config/
+│   ├── db.js
+│   └── jwtConfig.js
+│
+├── controllers/
+│   ├── subscriptionController.js
+│   └── webhookController.js
+│
+├── middlewares/
+│   ├── authMiddleware.js
+│   ├── bodyParser.js
+│   ├── rateLimitMiddleware.js
+│   ├── requestMetrics.js
+│   └── validationMiddleware.js
+│
+├── models/
+│   ├── Subscription.js
+│   └── User.js
+│
+├── routes/
+│   ├── subscriptionRoutes.js
+│   └── systemRoutes.js
+│
+├── services/
+│   └── subscriptionIntegrationService.js
+│
+├── test/
+│   └── paiement.test.js
+│
+├── utils/
+│   └── logger.js
+│
+├── Dockerfile
+├── package.json
+├── .env.example
+└── README.md
 ```
 
-## Tests
+---
 
-### Tests unitaires
+## 🔒 Sécurité
+
+- JWT obligatoire sur toutes les routes /subscription/* (authMiddleware)
+- Webhook Stripe : signature requise (STRIPE_WEBHOOK_SECRET) + raw body
+- CORS : domaines autorisés via CORS_ORIGINS
+- Rate limiting possible via rateLimitMiddleware
+- Logs : Winston (niveau via LOG_LEVEL, fichiers si ENABLE_FILE_LOGGING=true)
+
+---
+
+## 📊 Monitoring & Métriques
+
+- /metrics : Prometheus (latences HTTP, compteurs, santé services)
+- /health : statut service + Mongo/Stripe
+- /vitals : uptime, versions, providers activés
+- requestMetrics : temps de réponse et compteurs par route
+
+---
+
+## 🧪 Tests
+
 ```bash
 npm test
 ```
 
-### Tests en mode watch
-```bash
-npm run test:watch
-```
-
-### Coverage
-```bash
-npm test -- --coverage
-```
-
-## Docker
-
-### Build
-```bash
-docker build -t paiement-service .
-```
-
-### Run
-```bash
-docker run -p 5004:5004 -p 9004:9004 \
-  -e MONGODB_URI=mongodb://host.docker.internal:27017/roadtrip \
-  -e STRIPE_SECRET_KEY=sk_test_... \
-  paiement-service
-```
-
-### Docker Compose
-```yaml
-# Inclus dans le docker-compose.yml principal
-services:
-  paiement-service:
-    build: ./paiement-service
-    ports:
-      - "5004:5004"
-      - "9095:9090"
-    environment:
-      - MONGODB_URI=${MONGODB_URI}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
-```
-
-## Monitoring & Observabilité
-
-### Métriques Prometheus
-- `paiement_service_http_requests_total` - Nombre de requêtes
-- `paiement_service_http_request_duration_seconds` - Temps de réponse
-- `paiement_service_subscription_total` - Abonnements par type
-- `paiement_service_payment_success_total` - Paiements réussis
-- `paiement_service_refund_total` - Remboursements
-
-### Logs structurés
-```json
-{
-  "timestamp": "2024-01-01T12:00:00Z",
-  "level": "info",
-  "service": "paiement-service",
-  "type": "payment",
-  "message": "Paiement réussi",
-  "userId": "user123",
-  "plan": "monthly",
-  "amount": 5
-}
-```
-
-### Dashboards Grafana
-- **Payment Overview** - Vue globale des paiements
-- **Subscription Analytics** - Analyse des abonnements
-- **Error Tracking** - Suivi des erreurs
-- **Performance Metrics** - Métriques de performance
-
-## Sécurité
-
-### Authentification
-- **JWT obligatoire** sur toutes les routes `/subscription/*`
-- **Validation des tokens** avec middleware
-- **Gestion des rôles** (user/admin)
-
-### Protection des données
-- **Validation stricte** des inputs
-- **Rate limiting** sur les endpoints sensibles
-- **Logs de sécurité** pour tentatives d'accès
-- **Chiffrement** des données sensibles en transit
-
-### Webhooks sécurisés
-- **Vérification signature Stripe** obligatoire
-- **Endpoint dédié** `/webhook` avec raw body
-- **Logs détaillés** des événements reçus
-
-## Gestion d'erreurs
-
-### Codes d'erreur standards
-- `400` - Données invalides
-- `401` - Non authentifié
-- `403` - Accès refusé
-- `404` - Ressource introuvable
-- `429` - Rate limit dépassé
-- `500` - Erreur serveur
-
-## Business Logic
-
-### Plans disponibles
-- **Monthly**: 5€/mois
-- **Annual**: 45€/an (économie de ~25%)
-
-### Fonctionnalités premium
-- Itinéraires illimités
-- IA de recommandation avancée
-
-## Intégrations
-
-### Services externes
-- **Stripe** - Paiements et abonnements
-- **Prometheus** - Métriques
-- **MongoDB** - Stockage des données
-
-## Debugging
-
-### Logs détaillés
-```bash
-# Mode debug
-LOG_LEVEL=debug npm run dev
-
-# Suivre les logs
-tail -f logs/paiement-service/combined.log
-```
-
-### Test webhooks local
-```bash
-# Installer Stripe CLI
-stripe listen --forward-to localhost:5004/webhook
-
-# Simuler un événement
-stripe trigger checkout.session.completed
-```
-
-## Contribution
-
-1. **Fork** le projet
-2. **Créer** une branche (`git checkout -b feature/nouvelle-fonctionnalite`)
-3. **Commit** (`git commit -m 'Ajouter nouvelle fonctionnalité'`)
-4. **Push** (`git push origin feature/nouvelle-fonctionnalite`)
-5. **Pull Request**
-
-## Support
-
-- **Issues** : GitHub Issues
-- **Monitoring** : Grafana dashboard
-- **Logs** : Loki + Grafana
-
-## Licence
-
-MIT License - voir `LICENSE` file
+- Checkout Stripe (session URL)
+- Changement de plan / annulation / réactivation
+- Éligibilité & demande de remboursement
+- Webhooks : checkout.session.completed, invoice.paid, etc.
+- Endpoints système : /health, /metrics
 
 ---
 
-**Paiement Service** - *Gestion des abonnements premium ROADTRIP*
+## 🐳 Docker
+
+```bash
+# Build
+docker build -t paiement-service .
+
+# Run
+docker run -p 5004:5004 --env-file .env paiement-service
+```
+
+---
+
+## 🐛 Troubleshooting
+
+| Problème                             | Cause probable                       | Solution                                                                |
+| ------------------------------------ | ------------------------------------ | ----------------------------------------------------------------------- |
+| `Webhook Error: No signatures found` | Body parsé en JSON                   | Utiliser `bodyParser.raw({ type: 'application/json' })` pour `/webhook` |
+| `Invalid signature`                  | `STRIPE_WEBHOOK_SECRET` incorrect    | Vérifier la clé et l’endpoint dans Stripe                               |
+| `401 Unauthorized`                   | JWT manquant/expiré                  | Envoyer `Authorization: Bearer <token>` valide                          |
+| `Price ID non défini`                | Variables Stripe manquantes          | Renseigner `STRIPE_PRICE_MONTHLY_ID` / `STRIPE_PRICE_ANNUAL_ID`         |
+| `Mongo disconnected`                 | MONGODB\_URI vide ou indisponible    | Renseigner `.env`, vérifier la connexion                                |
+| `createCheckoutSession` 500          | Email manquant ou clé Stripe absente | Vérifier user.email dans JWT et `STRIPE_SECRET_KEY`                     |
+
+---
+
+## 👥 Contexte Projet
+
+**Projet M2** - Développement d'un microservice pour plateforme de roadtrip  
+**Certification** : RNCP39583 - Expert en Développement Logiciel 
+**Technologies** : Node.js, Express, Stripe, MongoDB, Prometheus, Docker
+**Auteur** : Inès GERVAIS

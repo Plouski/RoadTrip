@@ -7,7 +7,7 @@ const { register, updateServiceHealth, updateActiveConnections, updateExternalSe
 
 const SERVICE_NAME = process.env.SERVICE_NAME || "paiement-service";
 const PORT = parseInt(process.env.PORT || "5004", 10);
-const METRICS_PORT = parseInt(process.env.METRICS_PORT || "9004", 10);
+const METRICS_PORT = parseInt(process.env.METRICS_PORT || "9090", 10);
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 const app = createApp();

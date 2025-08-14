@@ -1,19 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/useMobile";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useChat } from "@/hooks/useChat";
 import { useAuthentication } from "@/hooks/useAuthentication";
 import Loading from "@/components/ui/loading";
-import { ChatLayout } from "@/components/assistant/chat-layout";
-import { MessagesContainer } from "@/components/assistant/messages-container";
-import { ChatInput } from "@/components/assistant/chat-input";
+import { ChatLayout } from "@/components/ai/chat-layout";
+import { MessagesContainer } from "@/components/ai/messages-container";
+import { ChatInput } from "@/components/ai/chat-input";
 
 export default function AssistantPage() {
-  const router = useRouter();
   const isMobile = useIsMobile();
   const inputRef = useRef<HTMLInputElement>(null);
   

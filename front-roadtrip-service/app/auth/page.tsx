@@ -17,6 +17,7 @@ import {
 import { Facebook, Github } from "lucide-react";
 import { AuthService } from "@/services/auth-service";
 import { AlertMessage } from "@/components/ui/alert-message";
+import Loading from "@/components/ui/loading";
 
 export default function AuthPage(): JSX.Element {
   const router = useRouter();
@@ -79,7 +80,7 @@ export default function AuthPage(): JSX.Element {
 
   // ✅ Une fois les hooks définis, tu peux retourner une UI conditionnelle
   if (checkingAuth) {
-    return <p className="text-center text-gray-500 py-10">Redirection...</p>;
+    return <Loading text="Chargement..." />;;
   }
 
   // Gestion du formulaire de connexion

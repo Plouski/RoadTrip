@@ -1,10 +1,10 @@
 "use client";
 
 import { ReactNode } from "react";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { AssistantSidebar } from "@/components/assistant/assistant-sidebar";
-import { ChatHeader } from "@/components/assistant/chat-header";
-import { SidebarToggle } from "@/components/assistant/sidebar-toggle";
+import { useIsMobile } from "@/hooks/useMobile";
+import { AssistantSidebar } from "@/components/ai/assistant-sidebar";
+import { ChatHeader } from "@/components/ai/chat-header";
+import { SidebarToggle } from "@/components/ai/sidebar-toggle";
 
 interface ChatLayoutProps {
   children: ReactNode;

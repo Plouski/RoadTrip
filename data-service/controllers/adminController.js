@@ -6,6 +6,28 @@ const Subscription = require("../models/Subscription");
 const mongoose = require("mongoose");
 const logger = require("../utils/logger");
 
+const toCurrencyCode = (c) => {
+  if (!c) return "EUR";
+  const up = String(c).toUpperCase();
+  return ["EUR", "USD", "GBP"].includes(up) ? up : "EUR";
+};
+
+const normalizeBudget = (b) => {
+  if (b && typeof b === "object" && "amount" in b) {
+    return {
+      amount: Number(b.amount) || 0,
+      currency: toCurrencyCode(b.currency),
+    };
+  }
+  const amount =
+    typeof b === "number"
+      ? b
+      : typeof b === "string"
+      ? Number(b.replace(/[^\d.]/g, "")) || 0
+      : 0;
+  return { amount, currency: "EUR" };
+};
+
 /* Statistiques dashboard admin */
 const getStats = async (req, res) => {
   try {
@@ -194,7 +216,9 @@ const getUserSubscription = async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "ID utilisateur invalide" });
+      return res
+        .status(400)
+        .json({ success: false, message: "ID utilisateur invalide" });
     }
 
     const sub = await Subscription.findOne({ userId: id })
@@ -401,36 +425,36 @@ const deleteTrip = async (req, res) => {
 const getTripById = async (req, res) => {
   try {
     const { id } = req.params;
-
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "ID roadtrip invalide",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "ID roadtrip invalide" });
     }
 
-    const trip = await Trip.findById(id).populate(
-      "userId",
-      "firstName lastName email"
-    );
-
+    const trip = await Trip.findById(id)
+      .populate("userId", "firstName lastName email")
+      .lean();
     if (!trip) {
-      return res.status(404).json({
-        success: false,
-        message: "Roadtrip non trouvé",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Roadtrip non trouvé" });
     }
 
-    res.status(200).json({
-      success: true,
-      trip,
-    });
+    const normalized = {
+      ...trip,
+      budget: normalizeBudget(trip.budget),
+      duration: Number(trip.duration) || 0,
+    };
+
+    res.status(200).json({ success: true, trip: normalized });
   } catch (error) {
     logger.logError("Admin getTripById", error);
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de la récupération du roadtrip",
-    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Erreur lors de la récupération du roadtrip",
+      });
   }
 };
 
@@ -438,21 +462,24 @@ const getTripById = async (req, res) => {
 const updateRoadtrip = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({
-        success: false,
-        message: "ID roadtrip invalide",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "ID roadtrip invalide" });
     }
 
-    // Nettoyer les données undefined
-    Object.keys(updateData).forEach((key) => {
-      if (updateData[key] === undefined || updateData[key] === "") {
-        delete updateData[key];
-      }
+    Object.keys(updateData).forEach((k) => {
+      if (updateData[k] === "") delete updateData[k];
     });
+
+    if ("budget" in updateData) {
+      updateData.budget = normalizeBudget(updateData.budget);
+    }
+    if ("duration" in updateData) {
+      updateData.duration = Number(updateData.duration) || 0;
+    }
 
     const updatedTrip = await Trip.findByIdAndUpdate(
       id,
@@ -461,13 +488,10 @@ const updateRoadtrip = async (req, res) => {
     );
 
     if (!updatedTrip) {
-      return res.status(404).json({
-        success: false,
-        message: "Roadtrip non trouvé",
-      });
+      return res
+        .status(404)
+        .json({ success: false, message: "Roadtrip non trouvé" });
     }
-
-    logger.info(`📝 Roadtrip mis à jour: ${updatedTrip.title}`);
 
     res.status(200).json({
       success: true,
@@ -491,10 +515,16 @@ const createRoadtrip = async (req, res) => {
       userId: req.user.userId,
     };
 
+    if ("budget" in tripData) {
+      tripData.budget = normalizeBudget(tripData.budget);
+    }
+
+    if ("duration" in tripData) {
+      tripData.duration = Number(tripData.duration) || 0;
+    }
+
     const newTrip = new Trip(tripData);
     await newTrip.save();
-
-    logger.info(`✅ Nouveau roadtrip créé: ${newTrip.title}`);
 
     res.status(201).json({
       success: true,

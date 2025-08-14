@@ -1,22 +1,20 @@
-const JwtConfig = require('../config/jwtConfig');
-const logger = require('../utils/logger');
+const JwtConfig = require("../config/jwtConfig");
+const logger = require("../utils/logger");
 
 // Middleware de vérification d'authentification
 const authMiddleware = (req, res, next) => {
-
   const token =
-    req.headers.authorization?.split(' ')[1] ||
+    req.headers.authorization?.split(" ")[1] ||
     req.cookies?.accessToken ||
-    req.headers['x-access-token'] ||
+    req.headers["x-access-token"] ||
     req.query.token;
 
   if (!token) {
-    logger.warn('🔒 Tentative d\'accès sans token.');
-    return res.status(401).json({ message: 'Authentification requise.' });
+    logger.warn("🔒 Tentative d'accès sans token.");
+    return res.status(401).json({ message: "Authentification requise." });
   }
 
   try {
-
     const decoded = JwtConfig.verifyToken(token);
 
     req.user = {
@@ -27,18 +25,18 @@ const authMiddleware = (req, res, next) => {
 
     next();
   } catch (error) {
-    logger.warn('🔒 Token invalide ou expiré.', { error: error.message });
+    logger.warn("🔒 Token invalide ou expiré.", { error: error.message });
 
-    if (error.message === 'Token expiré') {
+    if (error.name === "TokenExpiredError") {
       return res.status(401).json({
-        message: 'Session expirée, veuillez vous reconnecter.',
-        code: 'TOKEN_EXPIRED',
+        message: "Authentification invalide.",
+        code: "TOKEN_EXPIRED",
       });
     }
 
     return res.status(401).json({
-      message: 'Authentification invalide.',
-      code: 'INVALID_TOKEN',
+      message: "Authentification invalide.",
+      code: "INVALID_TOKEN",
     });
   }
 };
@@ -47,21 +45,21 @@ const authMiddleware = (req, res, next) => {
 const roleMiddleware = (roles = []) => {
   return (req, res, next) => {
     if (!req.user) {
-      logger.warn('🔒 Accès refusé - utilisateur non authentifié.');
-      return res.status(401).json({ message: 'Authentification requise.' });
+      logger.warn("🔒 Accès refusé - utilisateur non authentifié.");
+      return res.status(401).json({ message: "Authentification requise." });
     }
 
-    const userRole = req.user.role || 'user';
+    const userRole = req.user.role || "user";
 
     if (roles.length && !roles.includes(userRole)) {
-      logger.warn('🚫 Accès refusé - rôle insuffisant.', {
+      logger.warn("🚫 Accès refusé - rôle insuffisant.", {
         userId: req.user.userId,
         userRole,
         requiredRoles: roles,
       });
 
       return res.status(403).json({
-        message: 'Accès refusé - permissions insuffisantes.',
+        message: "Accès refusé - permissions insuffisantes.",
       });
     }
 

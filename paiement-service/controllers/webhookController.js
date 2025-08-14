@@ -53,7 +53,9 @@ class WebhookController {
       switch (event.type) {
         case "checkout.session.completed":
           return res.json(
-            await WebhookController.handleCheckoutSessionCompleted(event.data.object)
+            await WebhookController.handleCheckoutSessionCompleted(
+              event.data.object
+            )
           );
 
         case "customer.subscription.deleted":
@@ -73,7 +75,9 @@ class WebhookController {
 
         case "invoice.payment_failed":
           return res.json(
-            await WebhookController.handleInvoicePaymentFailed(event.data.object)
+            await WebhookController.handleInvoicePaymentFailed(
+              event.data.object
+            )
           );
 
         default:
@@ -107,15 +111,21 @@ class WebhookController {
 
     if (session.subscription && !isTest) {
       try {
-        const stripeSub = await stripe.subscriptions.retrieve(session.subscription);
+        const stripeSub = await stripe.subscriptions.retrieve(
+          session.subscription
+        );
         stripeSubscriptionId = stripeSub.id;
         stripePriceId = stripeSub.items.data[0]?.price?.id;
 
         if (stripePriceId) {
-          plan = await SubscriptionIntegrationService.getPlanFromStripePrice(stripePriceId);
+          plan = await SubscriptionIntegrationService.getPlanFromStripePrice(
+            stripePriceId
+          );
         }
       } catch (err) {
-        logger.warn(`[⚠️ Stripe] Erreur récupération abonnement: ${err.message}`);
+        logger.warn(
+          `[⚠️ Stripe] Erreur récupération abonnement: ${err.message}`
+        );
       }
     }
 
@@ -124,7 +134,9 @@ class WebhookController {
     console.log(`📅 Dates calculées pour plan ${plan}:`, {
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-      duration: `${Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24))} jours`,
+      duration: `${Math.ceil(
+        (endDate - startDate) / (1000 * 60 * 60 * 24)
+      )} jours`,
     });
 
     return SubscriptionIntegrationService.updateSubscription(userId, {
@@ -150,11 +162,28 @@ class WebhookController {
     });
   }
 
+  static async handleSubscriptionDeleted(subscription) {
+    try {
+      const customerId = subscription.customer;
+      const userId =
+        await SubscriptionIntegrationService.getUserIdFromCustomerId(
+          customerId
+        );
+
+      return { success: true, message: "Subscription deleted", userId };
+    } catch (err) {
+      logger.error("handleSubscriptionDeleted error", err);
+      return { success: false, error: "HANDLE_SUBSCRIPTION_DELETED_FAILED" };
+    }
+  }
+
   static async handleSubscriptionUpdated(subscription) {
     logger.info("[🔄] Stripe: customer.subscription.updated");
 
     const customerId = subscription.customer;
-    const userId = await SubscriptionIntegrationService.getUserIdFromCustomerId(customerId);
+    const userId = await SubscriptionIntegrationService.getUserIdFromCustomerId(
+      customerId
+    );
 
     if (!userId) {
       logger.warn(`❌ Aucun userId pour customerId: ${customerId}`);
@@ -183,7 +212,9 @@ class WebhookController {
     });
 
     if (subscription.cancel_at_period_end === true) {
-      logger.info(`[📅] Abonnement programmé pour annulation à la fin: ${endDate}`);
+      logger.info(
+        `[📅] Abonnement programmé pour annulation à la fin: ${endDate}`
+      );
       updateData.status = "canceled";
       updateData.isActive = true;
       updateData.cancelationType = "end_of_period";
@@ -204,12 +235,17 @@ class WebhookController {
 
     logger.debug(`[🛠️] Données de mise à jour pour ${userId}:`, updateData);
 
-    return SubscriptionIntegrationService.updateSubscription(userId, updateData);
+    return SubscriptionIntegrationService.updateSubscription(
+      userId,
+      updateData
+    );
   }
 
   static async handleInvoicePaid(invoice) {
     const customerId = invoice.customer;
-    const userId = await SubscriptionIntegrationService.getUserIdFromCustomerId(customerId);
+    const userId = await SubscriptionIntegrationService.getUserIdFromCustomerId(
+      customerId
+    );
 
     return SubscriptionIntegrationService.recordSubscriptionPayment(userId, {
       amount: invoice.amount_paid / 100,
@@ -223,7 +259,9 @@ class WebhookController {
 
   static async handleInvoicePaymentFailed(invoice) {
     const customerId = invoice.customer;
-    const userId = await SubscriptionIntegrationService.getUserIdFromCustomerId(customerId);
+    const userId = await SubscriptionIntegrationService.getUserIdFromCustomerId(
+      customerId
+    );
 
     return SubscriptionIntegrationService.recordPaymentFailure(userId, {
       amount: invoice.amount_due / 100,

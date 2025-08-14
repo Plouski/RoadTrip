@@ -128,7 +128,7 @@ process.env.NODE_ENV = 'test';
 process.env.SERVICE_NAME = 'ai-service';
 
 // Import de l'app depuis la racine
-const { app, server, metricsServer } = require('../server');
+const { app, server, metricsServer } = require('../index');
 
 // ===== TESTS =====
 describe('🚀 AI Service - Tests complets', () => {
