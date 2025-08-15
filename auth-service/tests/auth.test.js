@@ -1,151 +1,510 @@
-const request = require("supertest");
-
+// test/auth.test.js
+// ====================================================================
+// ENV + silence console
+// ====================================================================
 process.env.NODE_ENV = "test";
-process.env.SERVICE_NAME = "auth-service";
-process.env.SESSION_SECRET = "test-secret";
-process.env.GOOGLE_CLIENT_ID = "g-id";
-process.env.GOOGLE_CLIENT_SECRET = "g-secret";
-process.env.FACEBOOK_CLIENT_ID = "fb-id";
-process.env.FACEBOOK_CLIENT_SECRET = "fb-secret";
+process.env.SESSION_SECRET = "test-session";
+process.env.JWT_SECRET = "jwt-test-secret";
+process.env.JWT_EXPIRES_IN = "1h";
+process.env.JWT_REFRESH_EXPIRES_IN = "7d";
+process.env.FRONTEND_URL = "http://localhost:3000";
+process.env.DATA_SERVICE_URL = "http://localhost:5002";
 
-
-jest.mock("mongoose", () => {
-  const mockSchema = jest.fn().mockImplementation(() => ({ methods: {}, toJSON: jest.fn(), toObject: jest.fn() }));
-  mockSchema.prototype.methods = {};
-  return {
-    connect: jest.fn().mockResolvedValue({}),
-    connection: { readyState: 1, host: "localhost", name: "testdb" },
-    Schema: mockSchema,
-    model: jest.fn().mockReturnValue({
-      findById: jest.fn(),
-      findOne: jest.fn(),
-      save: jest.fn(),
-    }),
-  };
+let spyErr, spyWarn, spyInfo;
+beforeAll(() => {
+  spyErr = jest.spyOn(console, "error").mockImplementation(() => {});
+  spyWarn = jest.spyOn(console, "warn").mockImplementation(() => {});
+  spyInfo = jest.spyOn(console, "info").mockImplementation(() => {});
+});
+afterAll(() => {
+  spyErr?.mockRestore();
+  spyWarn?.mockRestore();
+  spyInfo?.mockRestore();
 });
 
-jest.mock("../config/jwtConfig", () => ({
-  generateAccessToken: jest.fn().mockReturnValue("mock-access-token"),
-  generateRefreshToken: jest.fn().mockReturnValue("mock-refresh-token"),
-  verifyToken: jest.fn().mockReturnValue({ userId: "test123", email: "test@example.com", role: "user" }),
-}));
+// ====================================================================
+// Mocks globaux (logger, axios, passport, rate-limit, session, helmet)
+// ====================================================================
 
-jest.mock("passport", () => ({
-  initialize: jest.fn(() => (req, res, next) => next()),
-  session: jest.fn(() => (req, res, next) => next()),
-  authenticate: jest.fn((strategy) => (req, res, next) => {
-    if (strategy === "google") return res.redirect("https://accounts.google.com/oauth/mock");
-    if (strategy === "facebook") return res.redirect("https://www.facebook.com/v18.0/dialog/oauth");
-    return next();
-  }),
-}));
-
-jest.mock("../services/dataService", () => ({
-  healthCheck: jest.fn().mockResolvedValue({ status: "ok" }),
-  findUserByEmail: jest.fn(),
-  createUser: jest.fn(),
-}));
-
-jest.mock("../config/passportConfig", () => ({ initializeStrategies: jest.fn() }));
-
-jest.mock("express-session", () =>
-  jest.fn(() => (req, _res, next) => {
-    req.session = {
-      id: "mock-session-id",
-      destroy: jest.fn((cb) => cb && cb()),
-      save: jest.fn((cb) => cb && cb()),
-    };
-    next();
-  })
-);
-
+// logger silencieux
 jest.mock("../utils/logger", () => ({
   info: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),
   debug: jest.fn(),
+  performance: jest.fn(),
   security: jest.fn(),
   auth: jest.fn(),
-  performance: jest.fn(),
-  middleware: () => (req, _res, next) => {
-    req.id = "test-id";
-    next();
-  },
+  user: jest.fn(),
 }));
 
-jest.mock("../metrics", () => ({
-  register: { contentType: "text/plain", metrics: () => Promise.resolve("metrics") },
-  httpRequestDuration: { observe: jest.fn() },
-  httpRequestsTotal: { inc: jest.fn() },
-  updateServiceHealth: jest.fn(),
-  updateActiveConnections: jest.fn(),
-  updateDatabaseHealth: jest.fn(),
-  updateExternalServiceHealth: jest.fn(),
+// axios mock "safe" avec __mock
+jest.mock("axios", () => {
+  const mockGet = jest.fn();
+  const mockPost = jest.fn();
+  const mockDelete = jest.fn();
+  const mockPut = jest.fn();
+  const client = {
+    get: mockGet,
+    post: mockPost,
+    delete: mockDelete,
+    put: mockPut,
+    interceptors: { request: { use: jest.fn() }, response: { use: jest.fn() } },
+  };
+  const mockCreate = jest.fn(() => client);
+  return {
+    get: mockGet,
+    post: mockPost,
+    delete: mockDelete,
+    put: mockPut,
+    create: mockCreate,
+    __mock: {
+      get: mockGet,
+      post: mockPost,
+      delete: mockDelete,
+      put: mockPut,
+      client,
+      create: mockCreate,
+    },
+  };
+});
+
+// helmet, rate-limit, session → middlewares no-op
+const mockHelmet = jest.fn(() => (_req, _res, next) => next());
+jest.mock(
+  "helmet",
+  () =>
+    (...args) =>
+      mockHelmet(...args)
+);
+
+const mockRate = jest.fn(() => (_req, _res, next) => next());
+jest.mock("express-rate-limit", () => () => mockRate());
+
+const mockSession = jest.fn(() => (_req, _res, next) => next());
+jest.mock(
+  "express-session",
+  () =>
+    (...args) =>
+      mockSession(...args)
+);
+
+// passport (pour applySecurity) : initialize()/session() no-op
+const mockPassportInitialize = jest.fn(() => (_req, _res, next) => next());
+const mockPassportSession = jest.fn(() => (_req, _res, next) => next());
+jest.mock("passport", () => {
+  const api = {
+    initialize: () => mockPassportInitialize(),
+    session: () => mockPassportSession(),
+    // authenticate mocké plus bas (pour les routes)
+  };
+  return api;
+});
+
+// PassportConfig.initializeStrategies
+const mockInitStrategies = jest.fn();
+jest.mock("../config/passportConfig", () => ({
+  initializeStrategies: mockInitStrategies,
 }));
 
-jest.mock("dotenv", () => ({ config: jest.fn() }));
+// ====================================================================
+// 1) applySecurity (loaders/security)
+// ====================================================================
+describe("loaders/security.applySecurity", () => {
+  beforeEach(() => jest.clearAllMocks());
 
-const app = require("../index");
-const JwtConfig = require("../config/jwtConfig");
+  test("branche Helmet, rate-limit, session, Passport", () => {
+    const calls = [];
+    const app = { use: (...mws) => calls.push(...mws) };
+    const { applySecurity } = require("../loaders/security");
 
+    applySecurity(app);
 
-describe("🔐 Auth Service – tests d’intégration", () => {
-  test("✅ /health fonctionne", async () => {
-    const res = await request(app).get("/health");
-    expect([200, 503]).toContain(res.statusCode);
+    expect(mockHelmet).toHaveBeenCalledTimes(1);
+    const helmetOpts = mockHelmet.mock.calls[0][0];
+    expect(helmetOpts.contentSecurityPolicy).toBeDefined();
+
+    expect(mockRate).toHaveBeenCalledTimes(2);
+    expect(mockSession).toHaveBeenCalledTimes(1);
+    const sessCfg = mockSession.mock.calls[0][0];
+    expect(sessCfg.secret).toBe("test-session");
+
+    expect(mockPassportInitialize).toHaveBeenCalledTimes(1);
+    expect(mockPassportSession).toHaveBeenCalledTimes(1);
+    expect(mockInitStrategies).toHaveBeenCalledTimes(1);
+
+    expect(calls.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+// ====================================================================
+// 2) JWT config
+// ====================================================================
+describe("config/jwtConfig", () => {
+  const Jwt = require("../config/jwtConfig");
+
+  test("generateAccessToken + verifyToken", () => {
+    const token = Jwt.generateAccessToken({
+      _id: "u1",
+      email: "a@b.com",
+      role: "user",
+    });
+    const decoded = Jwt.verifyToken(token);
+    expect(decoded.userId).toBe("u1");
+    expect(decoded.email).toBe("a@b.com");
+    expect(decoded.role).toBe("user");
+  });
+
+  test("generateRefreshToken + refreshToken -> nouveau access token", () => {
+    const refresh = Jwt.generateRefreshToken({ _id: "u2", email: "c@d.com" });
+    const newAccess = Jwt.refreshToken(refresh);
+    const decoded = Jwt.verifyToken(newAccess);
+    expect(decoded.userId).toBe("u2");
+    expect(decoded.email).toBe("c@d.com");
+  });
+
+  test("verifyToken -> Token invalide/expiré", () => {
+    const bad = "bad.token.here";
+    expect(() => Jwt.verifyToken(bad)).toThrow("Token invalide");
+  });
+});
+
+// ====================================================================
+// 3) Modèle User : isAdmin + toJSON (méthodes d’instance)
+// ====================================================================
+describe("models/User methods", () => {
+  test("isAdmin / toJSON", () => {
+    const mongoose = require("mongoose");
+    const User = require("../models/User");
+
+    const doc = new User({
+      email: "x@y.z",
+      role: "admin",
+      password: "secret",
+      verificationToken: "tok",
+      resetCode: "123",
+      resetCodeExpires: new Date(),
+    });
+    expect(doc.isAdmin()).toBe(true);
+
+    const json = doc.toJSON();
+    expect(json.password).toBeUndefined();
+    expect(json.verificationToken).toBeUndefined();
+    expect(json.resetCode).toBeUndefined();
+    expect(json.resetCodeExpires).toBeUndefined();
+    expect(json.email).toBe("x@y.z");
+
+    // autre rôle
+    const doc2 = new User({ role: "user" });
+    expect(doc2.isAdmin()).toBe(false);
+  });
+});
+
+// ====================================================================
+// 4) Controller OAuth (unitaires)
+// ====================================================================
+describe("controllers/authController OAuth", () => {
+  const dataService = require("../services/dataService");
+  const AuthController = require("../controllers/authController");
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Comme DataService est instancié, on peut injecter un mock sur une méthode utilisée dans error handler
+    dataService.logOAuthAttempt = jest.fn().mockResolvedValue({ ok: true });
+  });
+
+  const mockReqRes = (over = {}) => {
+    const req = {
+      user: null,
+      ip: "127.0.0.1",
+      id: "req-1",
+      sessionID: "sess-1",
+      get: (h) =>
+        h === "User-Agent" ? "jest" : h === "Accept" ? "*/*" : undefined,
+      query: {},
+      path: "/auth/oauth/google/callback",
+      ...over,
+    };
+    const res = {
+      statusCode: 200,
+      headers: {},
+      body: null,
+      _redirect: null,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload) {
+        this.body = payload;
+        return this;
+      },
+      redirect(url) {
+        this._redirect = url;
+        return this;
+      },
+    };
+    const next = jest.fn();
+    return { req, res, next };
+  };
+
+  test("handleOAuthSuccess → 401 si pas de req.user", async () => {
+    const { req, res, next } = mockReqRes();
+    await AuthController.handleOAuthSuccess(req, res, next);
+    expect(res.statusCode).toBe(401);
+    expect(res.body?.message).toMatch(/Authentification OAuth échouée/);
+  });
+
+  test("handleOAuthSuccess → JSON si Accept: application/json", async () => {
+    const { req, res, next } = mockReqRes({
+      get: (h) =>
+        h === "User-Agent"
+          ? "jest"
+          : h === "Accept"
+          ? "application/json"
+          : undefined,
+      user: {
+        user: {
+          _id: "u1",
+          email: "a@b.com",
+          firstName: "A",
+          lastName: "B",
+          role: "user",
+          avatar: null,
+          oauth: { provider: "google" },
+        },
+        accessToken: "acc",
+        refreshToken: "ref",
+      },
+    });
+    await AuthController.handleOAuthSuccess(req, res, next);
     expect(res.statusCode).toBe(200);
-    expect(res.body.service).toBe("auth-service");
+    expect(res.body?.user?.id).toBe("u1");
+    expect(res.body?.tokens?.accessToken).toBe("acc");
+    expect(next).not.toHaveBeenCalled();
   });
 
-  test("✅ Google OAuth redirige", async () => {
-    const res = await request(app).get("/auth/oauth/google").expect(302);
-    expect(res.headers.location).toContain("accounts.google.com");
+  test("handleOAuthSuccess → redirect sinon", async () => {
+    const { req, res, next } = mockReqRes({
+      user: {
+        user: {
+          _id: "u2",
+          email: "c@d.com",
+          firstName: "C",
+          lastName: "D",
+          role: "user",
+          avatar: null,
+          oauth: { provider: "google" },
+        },
+        accessToken: "acc2",
+        refreshToken: "ref2",
+      },
+    });
+    await AuthController.handleOAuthSuccess(req, res, next);
+    expect(res._redirect).toMatch(/\/oauth-callback\?token=acc2/);
   });
 
-  test("✅ Facebook OAuth redirige", async () => {
-    const res = await request(app).get("/auth/oauth/facebook").expect(302);
-    expect(res.headers.location).toContain("facebook.com");
+  test("handleOAuthError → redirect avec params", async () => {
+    const { req, res, next } = mockReqRes({
+      path: "/auth/oauth/google/error",
+      query: {
+        error: "access_denied",
+        error_description: "desc",
+        state: "xyz",
+      },
+    });
+    await AuthController.handleOAuthError(req, res, next);
+    expect(res._redirect).toMatch(
+      /\/oauth-error\?error=access_denied&provider=google/
+    );
+  });
+});
+
+// ====================================================================
+// 5) DataService (réel, via axios.__mock)
+// ====================================================================
+describe("services/dataService", () => {
+  const axios = require("axios");
+  const dataService = require("../services/dataService");
+
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  test("✅ Génération JWT simulée", () => {
-    const token = JwtConfig.generateAccessToken({ _id: "u1", email: "e@x.com", role: "user" });
-    expect(token).toBe("mock-access-token");
+  test("createUser OK", async () => {
+    axios.__mock.post.mockResolvedValueOnce({ data: { id: "u1" } });
+    const res = await dataService.createUser({ email: "a@b.com" });
+    expect(res).toEqual({ id: "u1" });
+    expect(axios.__mock.post).toHaveBeenCalledWith(
+      "/users",
+      expect.any(Object)
+    );
   });
 
-  test("✅ /providers retourne la config", async () => {
-    const res = await request(app).get("/providers").expect(200);
-    expect(res.body.providers).toHaveProperty("google");
-    expect(res.body.providers).toHaveProperty("facebook");
-    expect(res.body.availableProviders).toContain("google");
-    expect(res.body.availableProviders).toContain("facebook");
+  test("createUser erreur", async () => {
+    axios.__mock.post.mockRejectedValueOnce({
+      message: "BOOM",
+      response: { status: 500, data: { message: "x" } },
+    });
+    await expect(dataService.createUser({ email: "a@b.com" })).rejects.toThrow(
+      /Erreur création utilisateur/
+    );
   });
 
-  test("✅ /auth/logout ne plante pas", async () => {
+  test("findUserByEmail OK", async () => {
+    axios.__mock.get.mockResolvedValueOnce({
+      data: { id: "u2", role: "user" },
+    });
+    const res = await dataService.findUserByEmail("x@y.z");
+    expect(res.id).toBe("u2");
+    expect(axios.__mock.get).toHaveBeenCalledWith("/users/email/x%40y.z");
+  });
+
+  test("findUserByEmail 404 → null", async () => {
+    axios.__mock.get.mockRejectedValueOnce({ response: { status: 404 } });
+    const res = await dataService.findUserByEmail("none@none.com");
+    expect(res).toBeNull();
+  });
+
+  test("findUserById OK", async () => {
+    axios.__mock.get.mockResolvedValueOnce({
+      data: { id: "u3", email: "z@z.z" },
+    });
+    const res = await dataService.findUserById("u3");
+    expect(res.email).toBe("z@z.z");
+    expect(axios.__mock.get).toHaveBeenCalledWith("/users/u3");
+  });
+
+  test("findUserById 404 → null", async () => {
+    axios.__mock.get.mockRejectedValueOnce({ response: { status: 404 } });
+    const res = await dataService.findUserById("missing");
+    expect(res).toBeNull();
+  });
+
+  test("updateUser OK", async () => {
+    axios.__mock.put.mockResolvedValueOnce({ data: { id: "u4", name: "ok" } });
+    const res = await dataService.updateUser("u4", { name: "ok" });
+    expect(res.id).toBe("u4");
+    expect(axios.__mock.put).toHaveBeenCalledWith("/users/u4", { name: "ok" });
+  });
+
+  test("healthCheck healthy", async () => {
+    // healthClient.get('/health') → axios.create → __mock.get aussi
+    axios.__mock.get.mockResolvedValueOnce({
+      status: 200,
+      data: { status: "ok" },
+    });
+    const res = await dataService.healthCheck();
+    expect(res.status).toBe("healthy");
+  });
+
+  test("healthCheck unhealthy (throw)", async () => {
+    axios.__mock.get.mockRejectedValueOnce({
+      message: "down",
+      response: { status: 500 },
+    });
+    await expect(dataService.healthCheck()).rejects.toThrow(
+      /Data-service non disponible/
+    );
+  });
+
+  test("testConnection OK", async () => {
+    axios.__mock.get.mockResolvedValueOnce({ status: 200 });
+    const res = await dataService.testConnection();
+    expect(res.connected).toBe(true);
+  });
+
+  test("testConnection FAIL", async () => {
+    axios.__mock.get.mockRejectedValueOnce({
+      message: "timeout",
+      code: "ECONNABORTED",
+    });
+    const res = await dataService.testConnection();
+    expect(res.connected).toBe(false);
+    expect(res.error).toBe("timeout");
+  });
+});
+
+// ====================================================================
+// 6) Routes /auth/* (supertest), avec passport.authenticate mock
+// ====================================================================
+describe("routes/authRoutes (supertest)", () => {
+  beforeEach(() => jest.resetModules());
+
+  test("GET /auth/oauth/google/callback → JSON via handleOAuthSuccess", async () => {
+    jest.doMock("passport", () => ({
+      initialize: () => (_req, _res, next) => next(),
+      session: () => (_req, _res, next) => next(),
+      authenticate: (_strategy, _opts) => (req, _res, next) => {
+        req.user = {
+          user: {
+            _id: "u9",
+            email: "g@o.o",
+            firstName: "G",
+            lastName: "O",
+            role: "user",
+            avatar: null,
+            oauth: { provider: "google" },
+          },
+          accessToken: "accG",
+          refreshToken: "refG",
+        };
+        next();
+      },
+    }));
+
+    const express = require("express");
+    const routes = require("../routes/authRoutes");
+    const request = require("supertest");
+
+    const app = express();
+    app.use(express.json());
+    // injecter logout/session mocks pour /logout si besoin
+    app.use((req, _res, next) => {
+      req.logout = (cb) => cb();
+      req.session = { destroy: (cb) => cb() };
+      next();
+    });
+    app.use("/auth", routes);
+
+    const res = await request(app)
+      .get("/auth/oauth/google/callback")
+      .set("Accept", "application/json"); // force JSON plutôt que redirect
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body?.user?.id).toBe("u9");
+    expect(res.body?.tokens?.accessToken).toBe("accG");
+  });
+
+  test("GET /auth/providers", async () => {
+    const express = require("express");
+    const routes = require("../routes/authRoutes");
+    const request = require("supertest");
+
+    const app = express();
+    app.use("/auth", routes);
+
+    const res = await request(app).get("/auth/providers");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.providers.google.url).toBe("/auth/oauth/google");
+  });
+
+  test("POST /auth/logout", async () => {
+    const express = require("express");
+    const routes = require("../routes/authRoutes");
+    const request = require("supertest");
+
+    const app = express();
+    app.use(express.json());
+    // mock logout + session.destroy
+    app.use((req, _res, next) => {
+      req.logout = (cb) => cb();
+      req.session = { destroy: (cb) => cb() };
+      next();
+    });
+    app.use("/auth", routes);
+
     const res = await request(app).post("/auth/logout");
-    expect([200, 204, 500]).toContain(res.statusCode);
-  });
-
-  test("✅ /metrics répond", async () => {
-    const res = await request(app).get("/metrics").expect([200, 500]);
-    if (res.statusCode === 200) {
-      expect(res.headers["content-type"]).toContain("text/plain");
-      expect(typeof res.text).toBe("string");
-    }
-  });
-
-  test("✅ /vitals répond", async () => {
-    const res = await request(app).get("/vitals").expect(200);
-    expect(res.body.service).toBe("auth-service");
-  });
-
-  test("✅ 404 handler", async () => {
-    const res = await request(app).get("/route-absente").expect(404);
-    expect(res.body.service).toBe("auth-service");
-    expect(Array.isArray(res.body.availableRoutes)).toBe(true);
-  });
-
-  test("✅ Gestion erreur OAuth (callback)", async () => {
-    const res = await request(app).get("/auth/oauth/google/callback?error=access_denied");
-    expect([302, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toMatch(/Déconnexion réussie/);
   });
 });

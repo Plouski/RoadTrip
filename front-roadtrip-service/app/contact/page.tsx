@@ -283,58 +283,6 @@ export default function ContactPage() {
             </Card>
           </div>
         </div>
-
-        {/* FAQ rapide */}
-        <div className="mt-16">
-          <Card className="border-0 shadow-lg">
-            <CardHeader className="text-center">
-              <CardTitle>Questions fréquentes</CardTitle>
-              <CardDescription>
-                Peut-être trouverez-vous votre réponse ici !
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">
-                    Comment réinitialiser mon mot de passe ?
-                  </h4>
-                  <p className="text-sm text-gray-600">
-                    Cliquez sur "Mot de passe oublié" sur la page de connexion
-                    et suivez les instructions.
-                  </p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">
-                    Comment devenir Premium ?
-                  </h4>
-                  <p className="text-sm text-gray-600">
-                    Rendez-vous sur la page Premium depuis votre compte pour
-                    découvrir nos offres.
-                  </p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">
-                    Mes roadtrips sont-ils privés ?
-                  </h4>
-                  <p className="text-sm text-gray-600">
-                    Vos roadtrips sont privés par défaut. Vous pouvez choisir de
-                    les partager publiquement.
-                  </p>
-                </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-2">
-                    L'IA fonctionne-t-elle hors ligne ?
-                  </h4>
-                  <p className="text-sm text-gray-600">
-                    Non, l'assistant IA nécessite une connexion internet pour
-                    fonctionner correctement.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );

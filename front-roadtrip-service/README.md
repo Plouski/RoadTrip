@@ -87,7 +87,6 @@ front-roadtrip-service/
 ├── types/                     # Types/DTO
 ├── public/                    # Assets statiques
 ├── __tests__/                 # Tests
-├── __mocks__/                 # Mocks
 ├── tailwind.config.ts         # Config Tailwind
 ├── components.json            # Config shadcn/ui
 ├── next.config.mjs            # Config Next.js
