@@ -195,6 +195,8 @@ ai-service/
 │   ├── cacheKey.js
 │   ├── durationExtractor.js
 │   └── roadtripValidation.js
+├── tests/
+│   └── ai.test.js
 ├── metrics.js
 ├── index.js
 ├── Dockerfile

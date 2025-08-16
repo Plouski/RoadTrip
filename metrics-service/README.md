@@ -6,11 +6,12 @@
 ## 📋 Vue d’ensemble
 
 Service Node.js/Express qui :
-- interroge **Prometheus** pour l’état des microservices,
+- interroge **Prometheus** pour l'état des microservices,
 - expose **/metrics** pour le scraping Prometheus,
 - fournit des endpoints **health/vitals/status**,
 - donne un **dashboard JSON** en direct (UP/DOWN + req/s),
-- s’intègre à **Loki/Promtail** pour les logs centralisés.
+- s'intègre à **Loki/Promtail** pour les logs centralisés,
+- **surveille automatiquement** les services et envoie des **alertes email** en cas de panne.
 
 ---
 
@@ -19,8 +20,9 @@ Service Node.js/Express qui :
 - **/metrics** disponible sur le serveur principal **et** un **serveur dédié** (scrape-friendly)  
 - **Dashboard JSON** prêt à consommer : services UP/DOWN + `rate(http_requests_total[5m])`  
 - **Métriques HTTP** automatiques (latence + compteur) via `metricsLogger`  
+- **Système d'alertes automatiques** : détection services DOWN + notifications email  
 - **Stack complète** : Prometheus (metrics), Loki+Promtail (logs), Grafana (visualisation)  
-- **Handlers d’erreurs** propres : 404 listant les routes, handler global détaillé en dev  
+- **Handlers d'erreurs** propres : 404 listant les routes, handler global détaillé en dev  
 
 ---
 
@@ -32,7 +34,8 @@ Service Node.js/Express qui :
 Node.js 20+
 Prometheus
 Loki + Promtail
-Grafana (optionnel mais recommandé)
+Grafana
+notification-service (pour les alertes)
 ```
 
 ### Configuration
@@ -57,9 +60,15 @@ PORT=5006
 METRICS_PORT=9090
 
 # Intégrations
-PROMETHEUS_URL=http://prometheus:9090
+PROMETHEUS_URL=http://localhost:9090
 FRONTEND_URL=http://localhost:3000
 GRAFANA_URL=http://localhost:3100
+
+# Alertes automatiques
+NOTIFICATION_SERVICE_URL=http://localhost:5005
+NOTIFICATION_API_KEY=test-api-key-123
+ADMIN_EMAIL=gervaisines@gmail.com
+ENABLE_ALERTS=true
 
 # Logs
 LOG_LEVEL=debug
@@ -99,6 +108,20 @@ app.use(metricsLogger(logger));
 - - exposé par l’app (port PORT, ex. 5006)
 - - exposé aussi par un serveur dédié (port METRICS_PORT, ex. 9090)
 
+### 🚨 Alertes
+
+- GET /api/alerts/status — État du système d'alertes
+- POST /api/alerts/test — Test manuel d'envoi d'alerte
+Exemple test d'alerte :
+```http
+POST /api/alerts/test
+Content-Type: application/json
+{
+  "type": "email",
+  "severity": "WARNING"
+}
+```
+
 #### Agrégations Prometheus
 
 - GET /api/dashboard : Retourne un JSON synthétique basé sur :
@@ -120,6 +143,19 @@ Exemple de réponse :
 }
 ```
 - GET /api/services/status : Liste les jobs Prometheus et leur statut healthy/down via la métrique up.
+
+---
+
+## 🚨 Système d'alertes automatiques
+
+### Fonctionnement
+Le **AlertManager** surveille automatiquement tous les services toutes les **30 secondes** :
+
+1. **Interroge Prometheus** : Récupère la métrique up pour tous les services
+2. **Détecte les pannes** : Si up = 0 pour un service
+3. **Envoie une alerte** : Email automatique via notification-service
+4. **Anti-spam** : Cooldown de 10 minutes par service
+5. **Recovery** : Supprime l'alerte quand le service redevient UP
 
 ---
 
@@ -168,9 +204,11 @@ metrics-service/
 ├── src/
 │   ├── app.js
 │   ├── server.js
-│   ├── index.js
 │   ├── config.js
 │   ├── metrics.js
+│   ├── alerting/
+│   │   ├── alertManager.js
+│   │   └── notificationChannels.js
 │   ├── routes/
 │   │   ├── index.js
 │   │   ├── home.js
@@ -178,7 +216,8 @@ metrics-service/
 │   │   ├── health.js
 │   │   ├── vitals.js
 │   │   ├── dashboard.js
-│   │   └── status.js
+│   │   ├── status.js
+│   │   └── alerts.js
 │   └── middlewares/
 │       ├── metricsLogger.js
 │       └── errorHandler.js
@@ -222,6 +261,7 @@ npm test
 - /metrics (200 et content-type)
 - /health, /vitals, /ping
 - /api/dashboard & /api/services/status (mock Prometheus)
+- /api/alerts/test & /api/alerts/status
 
 ---
 
@@ -239,14 +279,28 @@ docker run -p 5006:5006 -p 9090:9090 --env-file .env metrics-service
 
 ## 🐛 Troubleshooting
 
-| Problème                    | Cause probable            | Solution                                                         |
-| --------------------------- | ------------------------- | ---------------------------------------------------------------- |
-| `GET /api/dashboard` → 500  | Prometheus indisponible   | Vérifier `PROMETHEUS_URL`, réseau, service Prometheus            |
-| Aucune métrique HTTP        | `metricsLogger` non monté | Vérifier `app.use(metricsLogger(logger))` dans `src/app.js`      |
-| Prometheus ne scrape pas    | Mauvais port/chemin       | Vérifier `prometheus.yml` (target + `metrics_path: /metrics`)    |
-| Pas de logs dans Loki       | Mauvais chemins de logs   | Monter les volumes de logs app sous `/var/log/app/<service>/...` |
-| `GET /metrics` → 500        | Registre non initialisé   | Vérifier `createMetrics()` et `app.locals.register`              |
-| `/metrics` chargé mais vide | Aucun trafic              | Générer des requêtes sur le service pour alimenter les compteurs |
+| Problème                    | Cause probable              | Solution                                                                 |
+| --------------------------- | --------------------------- | ------------------------------------------------------------------------ |
+| `GET /api/dashboard` → 500  | Prometheus indisponible     | Vérifier `PROMETHEUS_URL`, réseau, service Prometheus                    |
+| Aucune métrique HTTP        | `metricsLogger` non monté   | Vérifier `app.use(metricsLogger(logger))` dans `src/app.js`              |
+| Prometheus ne scrape pas    | Mauvais port/chemin         | Vérifier `prometheus.yml` (target + `metrics_path: /metrics`)            |
+| Pas de logs dans Loki       | Mauvais chemins de logs     | Monter les volumes de logs app sous `/var/log/app/<service>/...`         |
+| `GET /metrics` → 500        | Registre non initialisé     | Vérifier `createMetrics()` et `app.locals.register`                      |
+| `/metrics` chargé mais vide | Aucun trafic                | Générer des requêtes sur le service pour alimenter les compteurs         |
+|   Alertes non reçues        | Config notification manquante | Vérifier `NOTIFICATION_SERVICE_URL` + `ADMIN_EMAIL`                      |
+|   Services DOWN non détectés | Prometheus inaccessible    | Tester `curl http://localhost:9090/api/v1/query?query=up`                |
+|   Spam d'alertes            | Cooldown défaillant         | Vérifier logs AlertManager pour cooldown                                 |
+
+---
+
+## 🎯 Validation du système d'alertes
+
+### Tests à effectuer
+1. **Arrêter un service** : docker-compose stop auth-service
+2. **Attendre 1-2 minutes** : Le système détecte la panne
+3. **Vérifier email reçu** : Alerte automatique dans votre boîte
+4. **Redémarrer le service** : docker-compose start auth-service
+5. **Vérifier recovery** : Plus d'alertes envoyées
 
 ---
 

@@ -251,6 +251,47 @@ router.post("/api/contact/send", requireApiKey, async (req, res) => {
   });
 });
 
+// Route pour les alertes (appelée par metrics-service)
+router.post('/api/alert', requireApiKey, async (req, res) => {  // ✅ requireApiKey au lieu de authenticateApiKey
+  try {
+    const { email, username, apiKey, alert } = req.body;
+
+    logger.info("📨 Réception demande d'alerte", {
+      email: email ? '***' : undefined,
+      username: username ? '***' : undefined,
+      severity: alert.severity,
+      service: alert.service
+    });
+
+    const results = {};
+
+    // Envoi email si demandé
+    if (email) {
+      try {
+        const result = await EmailService.sendAlertEmail(email, alert);
+        results.email = { success: true, messageId: result.messageId };
+        logger.info("✅ Email d'alerte envoyé", { email: '***', messageId: result.messageId });
+      } catch (error) {
+        results.email = { success: false, error: error.message };
+        logger.error("❌ Erreur envoi email d'alerte", { error: error.message });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Alerte traitée",
+      results
+    });
+
+  } catch (error) {
+    logger.error("💥 Erreur traitement alerte", { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 router.get("/api/test/mailjet", requireApiKey, async (req, res) => {
   try {
     logger.info("🧪 Test de configuration Mailjet demandé");

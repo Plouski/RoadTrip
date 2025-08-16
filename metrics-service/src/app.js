@@ -7,6 +7,9 @@ const routes = require("./routes");
 const metricsLogger = require("./middlewares/metricsLogger");
 const { notFound, global } = require("./middlewares/errorHandler")(logger);
 
+const alertRoutes = require("./routes/alerts.js");           // ✅ Mais commenté car le fichier n'existe pas encore
+const { AlertManager } = require("./alerting/alertManager.js"); // ✅ Mais commenté car le fichier n'existe pas encore
+
 function createApp() {
   const app = express();
 
@@ -34,6 +37,13 @@ function createApp() {
   });
 
   app.use("/", routes({ logger }));
+  
+  app.use("/api/alerts", alertRoutes);
+
+  const alertManager = new AlertManager();
+  setInterval(() => {
+    alertManager.checkAlerts();
+  }, 30000);
 
   app.use(notFound);
   app.use(global);

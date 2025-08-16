@@ -171,6 +171,40 @@ const createContactConfirmationEmail = (formData) => {
   };
 };
 
+const createAlertEmail = (alert) => {
+  const colors = {
+    'CRITICAL': '#ff0000',
+    'WARNING': '#ffaa00', 
+    'INFO': '#00aa00'
+  };
+
+  const color = colors[alert.severity] || '#cccccc';
+
+  return {
+    subject: `RoadTrip! Alert: ${alert.severity} - ${alert.service}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: ${color}; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+          <h1 style="margin: 0; color: white;">🚨 ${alert.severity} Alert</h1>
+        </div>
+        
+        <div style="background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <p><strong>Service :</strong> ${alert.service}</p>
+          <p><strong>Problème :</strong> ${alert.message}</p>
+          <p><strong>Heure :</strong> ${alert.timestamp}</p>
+          <p><strong>Sévérité :</strong> ${alert.severity}</p>
+        </div>
+
+        <p>Vérifiez le dashboard : <a href="${process.env.GRAFANA_URL || 'http://localhost:3100'}" style="color: #E30613;">Grafana</a></p>
+        
+        <p style="font-size: 12px; color: #999;">
+          Alert automatique générée par RoadTrip! Monitoring
+        </p>
+      </div>
+    `
+  };
+};
+
 const EmailService = {
   sendEmail: async ({ to, subject, html, from, text, timeout = 60000 }) => {
     const startTime = Date.now();
@@ -327,6 +361,16 @@ const EmailService = {
     const { subject, html } = createContactConfirmationEmail(formData);
     return await EmailService.sendEmail({
       to: formData.email,
+      subject,
+      html,
+      timeout: 30000
+    });
+  },
+
+  sendAlertEmail: async (email, alert) => {
+    const { subject, html } = createAlertEmail(alert);
+    return await EmailService.sendEmail({
+      to: email,
       subject,
       html,
       timeout: 30000

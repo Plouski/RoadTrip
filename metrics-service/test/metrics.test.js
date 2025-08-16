@@ -74,6 +74,32 @@ jest.mock("axios", () => {
   };
 });
 
+// 🆕 Mock AlertManager pour éviter setInterval
+jest.mock("../src/alerting/alertManager", () => {
+  return {
+    AlertManager: jest.fn().mockImplementation(() => ({
+      checkAlerts: jest.fn().mockResolvedValue(),
+      lastCheck: new Date().toISOString(),
+      channels: [],
+      rules: [],
+      getActiveAlerts: jest.fn().mockReturnValue([]),
+    })),
+  };
+});
+
+// 🆕 Mock EmailChannel
+jest.mock("../src/alerting/notificationChannels", () => {
+  return {
+    EmailChannel: jest.fn().mockImplementation(() => ({
+      send: jest
+        .fn()
+        .mockResolvedValue({ success: true, messageId: "test-123" }),
+      serviceUrl: "http://localhost:5005",
+      apiKey: "test-api-key",
+    })),
+  };
+});
+
 const promClient = require("prom-client");
 const axios = require("axios");
 const logger = require("../utils/logger");
@@ -264,10 +290,77 @@ describe("middlewares/errorHandler", () => {
 });
 
 // =====================================================================
-// 4) Routes + App (Supertest)
+// 🆕 4) AlertManager Tests
+// =====================================================================
+describe("alerting/AlertManager", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test("AlertManager s'initialise correctement", () => {
+    const { AlertManager } = require("../src/alerting/alertManager");
+    const alertManager = new AlertManager();
+
+    expect(alertManager.checkAlerts).toBeDefined();
+    expect(alertManager.getActiveAlerts).toBeDefined();
+    expect(typeof alertManager.checkAlerts).toBe("function");
+  });
+
+  test("AlertManager.checkAlerts() peut être appelé", async () => {
+    const { AlertManager } = require("../src/alerting/alertManager");
+    const alertManager = new AlertManager();
+
+    await expect(alertManager.checkAlerts()).resolves.not.toThrow();
+    expect(alertManager.checkAlerts).toHaveBeenCalledTimes(1);
+  });
+
+  test("AlertManager.getActiveAlerts() retourne un tableau", () => {
+    const { AlertManager } = require("../src/alerting/alertManager");
+    const alertManager = new AlertManager();
+
+    const activeAlerts = alertManager.getActiveAlerts();
+    expect(Array.isArray(activeAlerts)).toBe(true);
+  });
+});
+
+// =====================================================================
+// 🆕 5) EmailChannel Tests
+// =====================================================================
+describe("alerting/EmailChannel", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test("EmailChannel s'initialise avec config", () => {
+    const { EmailChannel } = require("../src/alerting/notificationChannels");
+    const emailChannel = new EmailChannel();
+
+    expect(emailChannel.send).toBeDefined();
+    expect(typeof emailChannel.send).toBe("function");
+  });
+
+  test("EmailChannel.send() simule envoi avec succès", async () => {
+    const { EmailChannel } = require("../src/alerting/notificationChannels");
+    const emailChannel = new EmailChannel();
+
+    const mockAlert = {
+      id: "test-alert",
+      severity: "WARNING",
+      service: "test-service",
+      message: "Test alert message",
+      timestamp: new Date().toISOString(),
+    };
+
+    const result = await emailChannel.send(mockAlert);
+
+    expect(result.success).toBe(true);
+    expect(result.messageId).toBe("test-123");
+    expect(emailChannel.send).toHaveBeenCalledWith(mockAlert);
+  });
+});
+
+// =====================================================================
+// 6) Routes + App (Supertest) - Version modifiée pour éviter setInterval
 // =====================================================================
 describe("routes + app (supertest)", () => {
   let app;
+  let intervalId;
   const request = require("supertest");
 
   beforeEach(() => {
@@ -277,8 +370,27 @@ describe("routes + app (supertest)", () => {
     axios.get.mockReset();
     axios.get.mockResolvedValue({ data: { data: { result: [] } } });
 
+    // 🆕 Mock setInterval pour éviter le problème
+    intervalId = null;
+    const originalSetInterval = global.setInterval;
+    global.setInterval = jest.fn((fn, delay) => {
+      intervalId = originalSetInterval(fn, delay);
+      return intervalId;
+    });
+
     const { createApp } = require("../src/app");
     app = createApp();
+
+    // Restaurer setInterval
+    global.setInterval = originalSetInterval;
+  });
+
+  afterEach(() => {
+    // 🆕 Nettoyer l'interval si il existe
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
   });
 
   test("GET /metrics -> 200 + text/plain + HELP", async () => {
@@ -315,6 +427,31 @@ describe("routes + app (supertest)", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body.service).toMatch(/Metrics Service/);
     expect(Array.isArray(res.body.endpoints)).toBe(true);
+  });
+
+  // 🆕 Tests des routes d'alertes
+  test("GET /api/alerts/status -> 200 + status alertes", async () => {
+    const res = await request(app).get("/api/alerts/status");
+    expect(res.statusCode).toBe(200);
+    expect(res.body.service).toBe("metrics-service");
+    expect(res.body.alerts).toBeDefined();
+    expect(typeof res.body.alerts.enabled).toBe("boolean");
+    expect(Array.isArray(res.body.alerts.channels)).toBe(true);
+  });
+
+  test("POST /api/alerts/test -> 200 + test alerte", async () => {
+    const res = await request(app)
+      .post("/api/alerts/test")
+      .send({ type: "email", severity: "WARNING" });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    // ✅ Correction : adaptez au vrai message retourné
+    expect(res.body.message).toMatch(/Test.*alert sent/);
+    expect(res.body.alert).toBeDefined();
+    expect(res.body.alert.severity).toBe("WARNING");
+    expect(res.body.alert.service).toBe("metrics-service");
+    expect(res.body.result).toBeDefined();
   });
 
   test("GET /api/dashboard -> succès (Prometheus OK)", async () => {

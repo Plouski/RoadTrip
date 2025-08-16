@@ -47,7 +47,6 @@ services:
       - NODE_ENV=development
       - MAILJET_API_KEY=${MAILJET_API_KEY}
       - MAILJET_API_SECRET=${MAILJET_API_SECRET}
-      - SMS_API_KEY=${SMS_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ORIGIN=http://localhost:3000
       - FRONTEND_URL=${FRONTEND_URL}
@@ -56,6 +55,9 @@ services:
       - EMAIL_FROM_NAME=${EMAIL_FROM_NAME}
       - EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS}
       - NOTIFICATION_API_KEY=${NOTIFICATION_API_KEY}
+      - GRAFANA_URL=http://grafana:3100
+      - FREE_MOBILE_USERNAME=${FREE_MOBILE_USERNAME}
+      - FREE_MOBILE_API_KEY=${FREE_MOBILE_API_KEY}
     volumes:
       - ./notification-service:/app
       - /app/node_modules
@@ -197,10 +199,13 @@ services:
       - METRICS_PORT=9090
       - NODE_ENV=development
       - PROMETHEUS_URL=http://prometheus:9090
-      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_URL=http://grafana:3100
       - GRAFANA_API_KEY=${GRAFANA_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
       - CORS_ORIGIN=http://localhost:3000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:5005
+      - NOTIFICATION_API_KEY=${NOTIFICATION_API_KEY}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
     volumes:
       - ./metrics-service:/app
       - /app/node_modules

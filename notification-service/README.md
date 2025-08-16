@@ -6,13 +6,14 @@
 ## 📋 Vue d'ensemble
 
 Service Node.js gérant les **notifications emails, SMS** et formulaires de contact avec intégration Mailjet et Free Mobile, templates HTML personnalisés, sécurité API-Key et monitoring Prometheus.
+Support des **alertes automatiques** pour le système de monitoring RoadTrip!
 
 ---
 
 ## 💡 Points forts
 
 - **API sécurisée** par clé API (`x-api-key`) pour toutes les routes sensibles  
-- **Support multi-canal** : emails transactionnels, SMS, formulaires de contact  
+- **Support multi-canal** : emails transactionnels, SMS, formulaires de contact, **alertes système**  
 - **Templates HTML responsives** aux couleurs RoadTrip!  
 - **Monitoring en temps réel** avec Prometheus et health checks avancés  
 - **Logs détaillés et structurés** avec Winston (JSON en prod, colorés en dev)  
@@ -22,14 +23,15 @@ Service Node.js gérant les **notifications emails, SMS** et formulaires de cont
 
 ## 🎯 Fonctionnalités 
 
-- ✅ **Email Transactionnel** : Confirmation compte + réinitialisation mot de passe
-- ✅ **SMS Free Mobile** : Codes de vérification par SMS
-- ✅ **Formulaire Contact** : Gestion emails support + confirmation utilisateur
-- ✅ **Templates HTML** : Emails branded RoadTrip! responsives
-- ✅ **API Security** : Protection API-Key pour requêtes inter-services
-- ✅ **Multi-Provider** : Mailjet (email) + Free Mobile (SMS)
-- ✅ **Monitoring Intégré** : Métriques Prometheus + health checks
-- ✅ **Fallback Mode** : Simulation si providers non configurés
+- **Email Transactionnel** : Confirmation compte + réinitialisation mot de passe
+- **SMS Free Mobile** : Codes de vérification par SMS
+- **Formulaire Contact** : Gestion emails support + confirmation utilisateur
+- **Alertes Système** : Notifications automatiques de monitoring
+- **Templates HTML** : Emails branded RoadTrip! responsives
+- **API Security** : Protection API-Key pour requêtes inter-services
+- **Multi-Provider** : Mailjet (email) + Free Mobile (SMS)
+- **Monitoring Intégré** : Métriques Prometheus + health checks
+- **Fallback Mode** : Simulation si providers non configurés
 
 ---
 
@@ -77,7 +79,10 @@ FREE_MOBILE_USERNAME=your-free-mobile-username
 FREE_MOBILE_API_KEY=your-free-mobile-api-key
 
 # Contact Configuration
-CONTACT_RECEIVE_EMAIL=contact@roadtrip.com
+CONTACT_RECEIVE_EMAIL=gervaisines@gmail.com
+
+# Alertes & Monitoring
+GRAFANA_URL=http://localhost:3100
 
 # Frontend
 FRONTEND_URL=http://localhost:3000
@@ -126,6 +131,24 @@ Body:
 {
   "email": "user@example.com",
   "code": "123456"
+}
+```
+
+### Alertes Système
+
+```http
+POST /api/alert
+Headers: x-api-key: <NOTIFICATION_API_KEY>
+Body:
+{
+  "type": "email",
+  "email": "admin@roadtrip.com",
+  "alert": {
+    "severity": "CRITICAL",
+    "service": "auth-service",
+    "message": "Service auth-service est DOWN",
+    "timestamp": "2025-08-16T10:30:00Z"
+  }
 }
 ```
 
@@ -213,6 +236,7 @@ notification-service/
 - Validation stricte des emails et données reçues
 - Limitation taille payload (1mb)
 - Logs détaillés pour toute tentative non autorisée
+- Alertes : Logs sécurisés (emails masqués ***)
 
 ---
 
@@ -221,7 +245,7 @@ notification-service/
 - Prometheus : métriques CPU, mémoire, temps de réponse, connexions actives, santé providers
 - Winston : logs JSON (prod) ou colorés (dev) avec émojis par service
 - Nettoyage auto des vieux fichiers logs
-- Logs spécialisés : user, trip, payment, performance, sécurité
+- Logs spécialisés : user, trip, payment, performance, sécurité, alertes système
 
 ---
 
@@ -232,7 +256,7 @@ npm test
 ```
 
 - Tests unitaires et d’intégration (jest + supertest)
-- Couverture : email, sms, contact, sécurité, métriques
+- Couverture : email, sms, contact, sécurité, métriques, alertes, sécurité, métriques
 - Simulation providers si credentials absents
 
 ---
@@ -251,12 +275,15 @@ docker run -p 5005:5005 --env-file .env notification-service
 
 ## 🐛 Troubleshooting
 
-| Erreur                  | Cause probable                          | Solution                                |
-| ----------------------- | --------------------------------------- | --------------------------------------- |
-| `Mailjet non configuré` | Variables manquantes                    | Vérifier `.env`                         |
-| `403 Free Mobile`       | Service inactif ou mauvais identifiants | Activer SMS dans compte Free            |
-| `API key requise`       | Header absent ou invalide               | Ajouter `x-api-key`                     |
-| Timeout envoi email     | Réseau ou provider lent                 | Augmenter timeout ou vérifier connexion |
+| Erreur                   | Cause probable                          | Solution                                      |
+| ------------------------ | --------------------------------------- | --------------------------------------------- |
+| `Mailjet non configuré`  | Variables manquantes                    | Vérifier `.env`                               |
+| `403 Free Mobile`        | Service inactif ou mauvais identifiants | Activer SMS dans compte Free                  |
+| `API key requise`        | Header absent ou invalide               | Ajouter `x-api-key`                           |
+| Timeout envoi email      | Réseau ou provider lent                 | Augmenter timeout ou vérifier connexion       |
+|  Alerte non reçue       | Config email manquante                  | Vérifier `ADMIN_EMAIL` + Mailjet              |
+|  Spam email alerte      | Nouveau domaine                         | Normal – configurer SPF/DKIM en prod          |
+|  Route `/api/alert` 404 | Route non ajoutée                       | Vérifier `routes.js` contient bien la route   |
 
 ---
 

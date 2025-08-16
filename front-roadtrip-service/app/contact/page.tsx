@@ -26,6 +26,8 @@ import {
   Star,
 } from "lucide-react";
 import { ContactService } from "@/services/contact-service";
+import Title from "@/components/ui/title";
+import Paragraph from "@/components/ui/paragraph";
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -127,162 +129,198 @@ export default function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className="container py-12 px-4 sm:px-6">
+    <div className="relative min-h-screen overflow-hidden">
+      <div className="container py-14 px-4 sm:px-6">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+        <div className="mx-auto mb-12 max-w-3xl text-center">
+          <Title level={1} className="mb-3">
             Contactez-nous
-          </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Une question ? Un problème ? Nous sommes là pour vous aider !
-            N'hésitez pas à nous contacter, notre équipe vous répondra
-            rapidement.
-          </p>
+          </Title>
+          <Paragraph size="sm" align="center">
+            Une question ? Un souci ? RoadTrip! est là pour vous aider.{" "}
+          </Paragraph>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
-          {/* Formulaire de contact */}
-          <div className="lg:col-span-2">
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle>Envoyez-nous un message</CardTitle>
-                <CardDescription>
-                  Remplissez le formulaire ci-dessous et nous vous répondrons
-                  rapidement.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {alertMessage && (
-                  <div className="mb-6">
-                    <AlertMessage message={alertMessage} type={alertType} />
+        <Card className="mx-auto max-w-3xl border border-gray-200/70 shadow-xl shadow-gray-900/[0.03]">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-2xl">Envoyez-nous un message</CardTitle>
+            <CardDescription>
+              Remplissez le formulaire ci-dessous et nous vous répondrons
+              rapidement.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="pt-0">
+            {alertMessage && (
+              <div className="mb-6">
+                <AlertMessage message={alertMessage} type={alertType} />
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-7">
+              {/* Nom et Email */}
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="name"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Nom complet *
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="name"
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) =>
+                        handleInputChange("name", e.target.value)
+                      }
+                      placeholder="Votre nom"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Email *
+                  </label>
+                  <div className="relative">
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        handleInputChange("email", e.target.value)
+                      }
+                      placeholder="votre@email.com"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Catégorie */}
+              <div>
+                <label className="mb-3 block text-sm font-medium text-gray-700">
+                  Catégorie de votre demande
+                </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {categories.map((category) => {
+                    const Icon = category.icon;
+                    const active = formData.category === category.id;
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() =>
+                          handleInputChange("category", category.id)
+                        }
+                        className={[
+                          "group relative rounded-xl border-2 p-3 text-left transition-all",
+                          active
+                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50",
+                        ].join(" ")}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon
+                            className={[
+                              "h-4 w-4 transition-colors",
+                              active
+                                ? "text-primary"
+                                : "text-gray-500 group-hover:text-gray-700",
+                            ].join(" ")}
+                          />
+                          <span className="text-sm font-medium">
+                            {category.label}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Sujet */}
+              <div>
+                <label
+                  htmlFor="subject"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
+                  Sujet *
+                </label>
+                <Input
+                  id="subject"
+                  type="text"
+                  value={formData.subject}
+                  onChange={(e) => handleInputChange("subject", e.target.value)}
+                  placeholder="Résumé de votre demande"
+                  required
+                />
+              </div>
+
+              {/* Message */}
+              <div>
+                <label
+                  htmlFor="message"
+                  className="mb-2 block text-sm font-medium text-gray-700"
+                >
+                  Message *
+                </label>
+                <Textarea
+                  id="message"
+                  value={formData.message}
+                  onChange={(e) => handleInputChange("message", e.target.value)}
+                  placeholder="Décrivez votre demande en détail..."
+                  rows={7}
+                  required
+                />
+                <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                  <span>Minimum 10 caractères</span>
+                  <span>{formData.message.length}/10</span>
+                </div>
+                <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{
+                      width: `${Math.min(
+                        (formData.message.length / 10) * 100,
+                        100
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Bouton d'envoi */}
+              <Button
+                type="submit"
+                disabled={isLoading || formData.message.length < 10}
+                className="w-full"
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Envoi en cours...
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    Envoyer le message
                   </div>
                 )}
+              </Button>
 
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Nom et Email */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Nom complet *
-                      </label>
-                      <Input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) =>
-                          handleInputChange("name", e.target.value)
-                        }
-                        placeholder="Votre nom"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Email *
-                      </label>
-                      <Input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) =>
-                          handleInputChange("email", e.target.value)
-                        }
-                        placeholder="votre@email.com"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* Catégorie */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">
-                      Catégorie de votre demande
-                    </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {categories.map((category) => {
-                        const Icon = category.icon;
-                        return (
-                          <button
-                            key={category.id}
-                            type="button"
-                            onClick={() =>
-                              handleInputChange("category", category.id)
-                            }
-                            className={`p-3 rounded-lg border-2 transition-all text-left ${
-                              formData.category === category.id
-                                ? "border-primary bg-primary/5"
-                                : "border-gray-200 hover:border-gray-300"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Icon className="h-4 w-4" />
-                              <span className="text-sm font-medium">
-                                {category.label}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Sujet */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Sujet *
-                    </label>
-                    <Input
-                      type="text"
-                      value={formData.subject}
-                      onChange={(e) =>
-                        handleInputChange("subject", e.target.value)
-                      }
-                      placeholder="Résumé de votre demande"
-                      required
-                    />
-                  </div>
-
-                  {/* Message */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Message *
-                    </label>
-                    <Textarea
-                      value={formData.message}
-                      onChange={(e) =>
-                        handleInputChange("message", e.target.value)
-                      }
-                      placeholder="Décrivez votre demande en détail..."
-                      rows={6}
-                      required
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Minimum 10 caractères ({formData.message.length}/10)
-                    </p>
-                  </div>
-
-                  {/* Bouton d'envoi */}
-                  <Button
-                    type="submit"
-                    disabled={isLoading || formData.message.length < 10}
-                    className="w-full bg-gradient-to-r from-primary to-primary-700 hover:opacity-90"
-                  >
-                    {isLoading ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Envoi en cours...
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Send className="h-4 w-4" />
-                        Envoyer le message
-                      </div>
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              {/* note RGPD / support */}
+              <p className="text-center text-xs text-gray-500">
+                En envoyant ce formulaire, vous acceptez que nous utilisions vos
+                informations pour vous répondre.
+              </p>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
