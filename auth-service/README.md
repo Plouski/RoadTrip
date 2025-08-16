@@ -63,7 +63,7 @@ FRONTEND_URL=http://localhost:3000
 SESSION_SECRET=super-secret-session-key
 
 # MongoDB
-MONGODB_URI=mongodb://localhost:27017/roadtrip_auth
+MONGODB_URI=mongodb+srv://admin:password123@cluster0.f5kut.mongodb.net/roadtrip?retryWrites=true&w=majority&appName=Cluster0
 
 # JWT
 JWT_SECRET=your_access_secret

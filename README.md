@@ -40,12 +40,12 @@ Frontend (Next.js)          Monitoring Stack
 │ └─────────────┘ └─────────────┘ └────────────────────┘ │
 │                                                        │
 │ ┌─────────────┐ ┌─────────────┐ ┌────────────────────┐ │
-│ │payment-svc  │ │notification-│ │  metrics-service   │ │
+│ │paiement-svc │ │notification-│ │  metrics-service   │ │
 │ │    :5004    │ │service :5005│ │     :5006          │ │
 │ │    :9095    │ │    :9094    │ │     :9096          │ │
 │ └─────────────┘ └─────────────┘ └────────────────────┘ │
 │                                                        │
-│                MongoDB :27017                          │
+│                MongoDB Atlas                           │
 └────────────────────────────────────────────────────────┘
 ```
 
@@ -59,14 +59,13 @@ Frontend (Next.js)          Monitoring Stack
 | Auth Service | 5001 | 9092 | http://localhost:5001 |
 | Data Service | 5002 | 9093 | http://localhost:5002 |
 | AI Service | 5003 | 9091 | http://localhost:5003 |
-| Payment Service | 5004 | 9095 | http://localhost:5004 |
+| Paiement Service | 5004 | 9095 | http://localhost:5004 |
 | Notification Service | 5005 | 9094 | http://localhost:5005 |
 | Metrics Service | 5006 | 9096 | http://localhost:5006 |
 | **Monitoring** | | | |
 | Prometheus | 9090 | - | http://localhost:9090 |
 | Grafana | 3100 | - | http://localhost:3100 |
 | Loki | 3101 | - | http://localhost:3101 |
-| MongoDB | 27017 | - | mongodb://localhost:27017 |
 
 ---
 
@@ -76,7 +75,6 @@ Frontend (Next.js)          Monitoring Stack
 
 - **Docker & Docker Compose** (recommandé)
 - **Node.js 20+** (pour développement local)
-- **MongoDB** (local ou cloud)
 - **Comptes API** : OpenAI, Stripe, Mailjet, Free Mobile
 
 ### Installation complète avec Docker
@@ -93,7 +91,7 @@ cp .env.example .env
 # 3. Lancer tous les services
 docker-compose up -d
 
-# 5. Vérifier que tous les services sont UP
+# 4. Vérifier que tous les services sont UP
 curl -s http://localhost:5006/api/services/status
 ```
 
@@ -152,7 +150,7 @@ curl -s http://localhost:5006/api/services/status
 - `GET /history` - Historique utilisateur
 - `DELETE /conversation/:id` - Supprimer conversation
 
-### 💳 Payment Service (Port: 5004)
+### 💳 Paiement Service (Port: 5004)
 **Responsabilité** : Abonnements et paiements
 
 - Intégration Stripe Checkout complète
@@ -289,8 +287,7 @@ CLIENT_URL=http://localhost:3000
 CORS_ORIGIN=http://localhost:3000
 
 # DATABASE CONFIGURATION
-MONGODB_URI=mongodb://admin:password123@mongodb:27017/roadtrip?authSource=admin
-
+MONGODB_URI=mongodb+srv://admin:password123@cluster0.f5kut.mongodb.net/roadtrip?retryWrites=true&w=majority&appName=Cluster0
 # JWT CONFIGURATION (PARTAGÉ ENTRE TOUS LES SERVICES)
 JWT_SECRET=roadTripTopSecret2024ChangeInProduction
 JWT_REFRESH_SECRET=refreshTopsecret2024ChangeInProduction
@@ -418,14 +415,14 @@ npm test -- --coverage
 # Vérifier tous les services
 for port in 5001 5002 5003 5004 5005 5006; do
   echo "Service port $port:"
-  curl -s http://localhost:$port/health | jq '.status // "unknown"'
+  curl -s http://localhost:$port/health
 done
 
 # Dashboard complet
-curl -s http://localhost:5006/api/dashboard | jq
+curl -s http://localhost:5006/api/dashboard
 
 # Métriques Prometheus
-curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].health'
+curl -s http://localhost:9090/api/v1/targets
 ```
 
 ---

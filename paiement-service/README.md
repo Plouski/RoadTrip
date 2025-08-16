@@ -50,7 +50,7 @@ PORT=5004
 CLIENT_URL=http://localhost:3000
 
 # Base de données
-MONGODB_URI=
+MONGODB_URI=mongodb+srv://admin:password123@cluster0.f5kut.mongodb.net/roadtrip?retryWrites=true&w=majority&appName=Cluster0
 
 # JWT
 JWT_SECRET=your_super_secret_jwt_key

@@ -60,7 +60,7 @@ SERVER_TIMEOUT=60000
 MAX_REQUEST_BODY_SIZE=1mb
 
 # MongoDB (OBLIGATOIRE)
-MONGODB_URI=
+MONGODB_URI= mongodb+srv://admin:password123@cluster0.f5kut.mongodb.net/roadtrip?retryWrites=true&w=majority&appName=Cluster0
 
 # JWT (OBLIGATOIRE)
 JWT_SECRET=your_access_secret

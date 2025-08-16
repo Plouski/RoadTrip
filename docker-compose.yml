@@ -178,8 +178,6 @@ services:
       - ./logs:/app/logs
     networks:
       - microservices-network
-    depends_on:
-      - mongodb
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
@@ -332,36 +330,11 @@ services:
       - loki
     restart: unless-stopped
 
-
-  # ───────────── DATABASES ─────────────
-
-  # MongoDB pour data-service et paiement-service
-  mongodb:
-    image: mongo:6.0
-    container_name: mongodb
-    ports:
-      - "27017:27017"
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password123
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - microservices-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 # ───────────── VOLUMES PERSISTANTS ─────────────
 volumes:
   prometheus_data:
     driver: local
   grafana_data:
-    driver: local
-  mongodb_data:
     driver: local
   loki_data:
     driver: local
