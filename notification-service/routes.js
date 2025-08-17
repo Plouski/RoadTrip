@@ -8,56 +8,114 @@ const logger = require("./utils/logger");
 const router = express.Router();
 const SERVICE_NAME = "notification-service";
 
-// --- Configuration CORS ---
+// --- Configuration CORS CORRIGÉE ---
 const allowedOrigins = [
-  "https://road-trip-iota.vercel.app", // prod
-  "http://localhost:3000", // dev
-  // Ajoute ici tes URLs de preview Vercel si besoin
+  "https://road-trip-iota.vercel.app",
+  "http://localhost:3000",
+  "https://localhost:3000", // HTTPS local
+  "http://localhost:3001",
+  "https://localhost:3001",
+  // Regex pour différents ports localhost
+  /^http:\/\/localhost:\d+$/,
+  /^https:\/\/localhost:\d+$/
 ];
 
 const corsOptions = {
-  origin: (origin, cb) => {
-    // Autorise aussi les requêtes sans Origin (curl/monitoring)
-    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    return cb(new Error("Not allowed by CORS"));
+  origin: function (origin, callback) {
+    console.log("🌐 CORS Origin reçu:", origin);
+    
+    // Autorise les requêtes sans origin (Postman, curl, etc.)
+    if (!origin) {
+      console.log("✅ CORS: Pas d'origin - autorisé");
+      return callback(null, true);
+    }
+    
+    // Vérifie si l'origin est dans la liste ou match les regex
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return allowed === origin;
+      }
+      // Test regex pour localhost avec différents ports
+      return allowed.test(origin);
+    });
+    
+    if (isAllowed) {
+      console.log("✅ CORS: Origin autorisé -", origin);
+      return callback(null, true);
+    }
+    
+    console.log("❌ CORS: Origin refusé -", origin);
+    return callback(new Error(`CORS: Origin ${origin} non autorisé`));
   },
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "x-api-key"],
-  credentials: false, // Explicitement défini
-  maxAge: 86400,
-  preflightContinue: false, // Passe le contrôle au handler suivant
-  optionsSuccessStatus: 204 // Certains navigateurs anciens ont des problèmes avec 200
+  allowedHeaders: [
+    "Origin",
+    "X-Requested-With", 
+    "Content-Type", 
+    "Accept",
+    "Authorization",
+    "x-api-key"
+  ],
+  credentials: false,
+  maxAge: 86400, // 24h
+  optionsSuccessStatus: 200 // Pour supporter les vieux navigateurs
 };
 
-// Active CORS pour toutes les routes du router - AVANT toute autre middleware
+// IMPORTANT: Applique CORS en PREMIER
 router.use(cors(corsOptions));
 
-// SUPPRIMÉ : Le middleware OPTIONS redondant qui causait le conflit
-// router.use((req, res, next) => {
-//   if (req.method === "OPTIONS") return res.sendStatus(204);
-//   next();
-// });
+// Middleware de logging pour debug
+router.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`, {
+    origin: req.get('origin'),
+    'user-agent': req.get('user-agent')?.substring(0, 50),
+    'content-type': req.get('content-type')
+  });
+  next();
+});
 
-// --- Middleware API Key (modifié pour mieux gérer OPTIONS) ---
+// --- Middleware API Key MODIFIÉ ---
 const requireApiKey = (req, res, next) => {
-  // Ignore la vérification de l'API key pour les requêtes preflight - le middleware CORS s'en occupe
+  // Laisse passer les OPTIONS sans vérification d'API key
   if (req.method === "OPTIONS") {
+    console.log("⚡ OPTIONS request - passthrough");
     return next();
   }
 
   const apiKey = req.headers["x-api-key"];
-  if (!apiKey || apiKey !== process.env.NOTIFICATION_API_KEY) {
-    logger.warn("❌ Tentative d'accès sans API key valide", {
+  
+  if (!apiKey) {
+    logger.warn("❌ API key manquante", {
       ip: req.ip,
-      userAgent: req.get("User-Agent"),
-      providedKey: apiKey ? "present" : "missing",
+      path: req.path,
+      method: req.method
     });
-    return res.status(403).json({ error: "API key requise" });
+    return res.status(401).json({ 
+      success: false,
+      error: "API key requise",
+      code: "MISSING_API_KEY"
+    });
   }
+
+  if (apiKey !== process.env.NOTIFICATION_API_KEY) {
+    logger.warn("❌ API key invalide", {
+      ip: req.ip,
+      path: req.path,
+      method: req.method,
+      providedKey: apiKey?.substring(0, 8) + "..."
+    });
+    return res.status(403).json({ 
+      success: false,
+      error: "API key invalide",
+      code: "INVALID_API_KEY"
+    });
+  }
+
+  console.log("✅ API key valide");
   next();
 };
 
-// --- Validation email simple ---
+// --- Validation email ---
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 // ---------------- Routes publiques (monitoring) ----------------
@@ -92,87 +150,29 @@ router.get("/vitals", (req, res) => {
 });
 
 router.get("/ping", (req, res) => {
-  res.json({ status: "pong ✅", timestamp: new Date().toISOString() });
+  console.log("🏓 Ping reçu");
+  res.json({ 
+    status: "pong ✅", 
+    timestamp: new Date().toISOString(),
+    cors: "enabled"
+  });
 });
 
-// ---------------- Routes protégées par API key ----------------
-router.post("/api/email/confirm", requireApiKey, async (req, res) => {
-  const { email, token } = req.body;
-  if (!email || !token || !validateEmail(email)) {
-    logger.warn("❌ Paramètres invalides pour confirmation email", {
-      email,
-      hasToken: !!token,
-    });
-    return res.status(400).json({ error: "Paramètres invalides" });
-  }
-  try {
-    await EmailService.sendConfirmationEmail(email, token);
-    res.json({ success: true, message: "Email de confirmation envoyé" });
-  } catch (error) {
-    logger.error("❌ Erreur envoi email confirmation", {
-      email,
-      error: error.message,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de l'envoi",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-});
-
-router.post("/api/email/reset", requireApiKey, async (req, res) => {
-  const { email, code } = req.body;
-  if (!email || !code || !validateEmail(email)) {
-    logger.warn("❌ Paramètres invalides pour reset email", {
-      email,
-      hasCode: !!code,
-    });
-    return res.status(400).json({ error: "Paramètres invalides" });
-  }
-  try {
-    await EmailService.sendPasswordResetEmail(email, code);
-    res.json({ success: true, message: "Email de réinitialisation envoyé" });
-  } catch (error) {
-    logger.error("❌ Erreur envoi email reset", {
-      email,
-      error: error.message,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de l'envoi",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-});
-
-router.post("/api/sms/reset", requireApiKey, async (req, res) => {
-  const { username, apiKey, code } = req.body;
-  if (!username || !apiKey || !code) {
-    logger.warn("❌ Paramètres invalides pour reset SMS", {
-      username,
-      hasApiKey: !!apiKey,
-      hasCode: !!code,
-    });
-    return res.status(400).json({ error: "Paramètres invalides" });
-  }
-  try {
-    await SmsService.sendPasswordResetCode(username, apiKey, code);
-    res.json({ success: true, message: "SMS de réinitialisation envoyé" });
-  } catch (error) {
-    logger.error("❌ Erreur envoi SMS reset", {
-      username,
-      error: error.message,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Erreur lors de l'envoi",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
+// Route de test CORS spécifique
+router.options("/api/contact/send", (req, res) => {
+  console.log("🔧 OPTIONS preflight pour /api/contact/send");
+  res.header("Access-Control-Allow-Origin", req.get("Origin"));
+  res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, x-api-key");
+  res.sendStatus(200);
 });
 
 router.post("/api/contact/send", requireApiKey, async (req, res) => {
+  console.log("📧 Réception demande de contact", {
+    body: !!req.body,
+    contentType: req.get('content-type')
+  });
+
   const startTime = Date.now();
   const {
     name,
@@ -185,17 +185,31 @@ router.post("/api/contact/send", requireApiKey, async (req, res) => {
     source,
   } = req.body;
 
-  // 🔒 Liste blanche des catégories acceptées
-  const allowed = ["problem", "info", "suggestion", "feedback", "other"];
+  // Validation des données
+  const errors = [];
+  if (!name || name.trim().length < 2)
+    errors.push("Le nom doit contenir au moins 2 caractères");
+  if (!email || !validateEmail(email)) errors.push("Email invalide");
+  if (!subject || subject.trim().length < 5)
+    errors.push("Le sujet doit contenir au moins 5 caractères");
+  if (!message || message.trim().length < 10)
+    errors.push("Le message doit contenir au moins 10 caractères");
 
-  // 🧹 Normalisation + fallback
-  const normalizedCategory = allowed.includes(
-    String(category || "").toLowerCase()
-  )
+  if (errors.length > 0) {
+    console.log("❌ Validation échouée:", errors);
+    return res.status(400).json({
+      success: false,
+      message: "Données invalides",
+      errors,
+    });
+  }
+
+  // Configuration des catégories
+  const allowed = ["problem", "info", "suggestion", "feedback", "other"];
+  const normalizedCategory = allowed.includes(String(category || "").toLowerCase())
     ? String(category).toLowerCase()
     : "other";
 
-  // 📚 Dictionnaire lisible + meta
   const categoryMap = {
     problem: {
       key: "problem",
@@ -241,41 +255,12 @@ router.post("/api/contact/send", requireApiKey, async (req, res) => {
 
   const categoryInfo = categoryMap[normalizedCategory];
 
-  logger.info("📧 Nouvelle demande de contact", {
-    type: "contact",
-    email,
-    category: categoryInfo.key,
-    subject: subject?.substring(0, 50) + (subject?.length > 50 ? "..." : ""),
-  });
-
-  const errors = [];
-  if (!name || name.trim().length < 2)
-    errors.push("Le nom doit contenir au moins 2 caractères");
-  if (!email || !validateEmail(email)) errors.push("Email invalide");
-  if (!subject || subject.trim().length < 5)
-    errors.push("Le sujet doit contenir au moins 5 caractères");
-  if (!message || message.trim().length < 10)
-    errors.push("Le message doit contenir au moins 10 caractères");
-
-  if (errors.length > 0) {
-    logger.warn("❌ Validation échouée pour demande de contact", {
-      type: "contact",
-      email,
-      errors,
-    });
-    return res.status(400).json({
-      success: false,
-      message: "Données invalides",
-      errors,
-    });
-  }
-
   const formData = {
     name: name.trim(),
     email: email.trim().toLowerCase(),
     subject: subject.trim(),
     category: categoryInfo.key,
-    categoryLabel: categoryInfo.label, // lisible
+    categoryLabel: categoryInfo.label,
     categoryName: categoryInfo.name,
     message: message.trim(),
     timestamp: timestamp || new Date().toISOString(),
@@ -285,39 +270,83 @@ router.post("/api/contact/send", requireApiKey, async (req, res) => {
   };
 
   const duration = Date.now() - startTime;
-  logger.info("✅ Demande de contact acceptée - traitement en cours", {
-    type: "contact",
-    email: formData.email,
-    category: formData.category,
-    duration: `${duration}ms`,
-  });
+  console.log("✅ Formulaire validé, envoi en cours...");
 
   res.json({
     success: true,
-    message:
-      "Votre message a été reçu et est en cours de traitement. Vous recevrez une confirmation par email.",
-    messageId: `contact-${Date.now()}-${Math.random()
-      .toString(36)
-      .substr(2, 6)}`,
+    message: "Votre message a été reçu et est en cours de traitement. Vous recevrez une confirmation par email.",
+    messageId: `contact-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
     duration: `${duration}ms`,
     status: "processing",
   });
 
+  // Envoi asynchrone des emails
   process.nextTick(async () => {
     try {
-      // ✅ Passe la catégorie normalisée + label à l'EmailService
       await EmailService.sendContactSupportEmail(formData, categoryInfo);
       await EmailService.sendContactConfirmationEmail(formData, categoryInfo);
-      logger.info("✅ Emails de contact envoyés avec succès", {
-        email: formData.email,
-      });
+      console.log("✅ Emails de contact envoyés avec succès");
     } catch (err) {
-      logger.error("❌ Erreur envoi emails de contact", { error: err.message });
+      console.error("❌ Erreur envoi emails de contact:", err.message);
     }
   });
 });
 
-// Route pour les alertes (appelée par metrics-service)
+// Autres routes avec requireApiKey...
+router.post("/api/email/confirm", requireApiKey, async (req, res) => {
+  const { email, token } = req.body;
+  if (!email || !token || !validateEmail(email)) {
+    return res.status(400).json({ error: "Paramètres invalides" });
+  }
+  try {
+    await EmailService.sendConfirmationEmail(email, token);
+    res.json({ success: true, message: "Email de confirmation envoyé" });
+  } catch (error) {
+    logger.error("❌ Erreur envoi email confirmation", { email, error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de l'envoi",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+router.post("/api/email/reset", requireApiKey, async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code || !validateEmail(email)) {
+    return res.status(400).json({ error: "Paramètres invalides" });
+  }
+  try {
+    await EmailService.sendPasswordResetEmail(email, code);
+    res.json({ success: true, message: "Email de réinitialisation envoyé" });
+  } catch (error) {
+    logger.error("❌ Erreur envoi email reset", { email, error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de l'envoi",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+router.post("/api/sms/reset", requireApiKey, async (req, res) => {
+  const { username, apiKey, code } = req.body;
+  if (!username || !apiKey || !code) {
+    return res.status(400).json({ error: "Paramètres invalides" });
+  }
+  try {
+    await SmsService.sendPasswordResetCode(username, apiKey, code);
+    res.json({ success: true, message: "SMS de réinitialisation envoyé" });
+  } catch (error) {
+    logger.error("❌ Erreur envoi SMS reset", { username, error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Erreur lors de l'envoi",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
 router.post("/api/alert", requireApiKey, async (req, res) => {
   try {
     const { email, username, apiKey, alert } = req.body;

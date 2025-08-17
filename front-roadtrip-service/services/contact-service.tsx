@@ -1,4 +1,4 @@
-// services/contact-service.ts - Version optimisée
+// services/contact-service.ts - Version avec debug renforcé
 
 interface ContactFormData {
   name: string;
@@ -21,37 +21,79 @@ class ContactAPI {
   private notificationServiceUrl = process.env.NEXT_PUBLIC_NOTIFICATION_SERVICE_URL || "http://localhost:5005";
   private apiKey = process.env.NEXT_PUBLIC_NOTIFICATION_API_KEY;
 
+  constructor() {
+    // Debug des variables d'environnement
+    console.log("🔧 ContactAPI Configuration:", {
+      url: this.notificationServiceUrl,
+      hasApiKey: !!this.apiKey,
+      apiKeyPreview: this.apiKey ? this.apiKey.substring(0, 8) + "..." : "MISSING"
+    });
+  }
+
   async sendContactMessage(formData: ContactFormData): Promise<ContactResponse> {
     try {
       if (!this.apiKey) {
+        console.error("❌ API key manquante dans les variables d'environnement");
         throw new Error("Configuration API manquante");
       }
 
-      console.log("📤 Envoi message de contact...", {
-        email: formData.email,
-        category: formData.category,
-        url: `${this.notificationServiceUrl}/api/contact/send`
-      });
+      const requestUrl = `${this.notificationServiceUrl}/api/contact/send`;
+      const requestHeaders = {
+        "Content-Type": "application/json",
+        "x-api-key": this.apiKey,
+      };
 
-      const response = await fetch(`${this.notificationServiceUrl}/api/contact/send`, {
+      const requestBody = {
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        subject: formData.subject.trim(),
+        category: formData.category || 'other',
+        message: formData.message.trim(),
+        timestamp: new Date().toISOString(),
+        userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
+        source: 'contact-form-frontend'
+      };
+
+      console.log("📤 Envoi message de contact...", {
+        url: requestUrl,
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-api-key": this.apiKey,
+          "Content-Type": requestHeaders["Content-Type"],
+          "x-api-key": requestHeaders["x-api-key"].substring(0, 8) + "..."
         },
-        body: JSON.stringify({
-          name: formData.name.trim(),
-          email: formData.email.trim().toLowerCase(),
-          subject: formData.subject.trim(),
-          category: formData.category || 'other',
-          message: formData.message.trim(),
-          timestamp: new Date().toISOString(),
-          userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : 'unknown',
-          source: 'contact-form-frontend'
-        }),
+        body: {
+          email: requestBody.email,
+          category: requestBody.category,
+          bodySize: JSON.stringify(requestBody).length + " chars"
+        }
       });
 
-      const data = await response.json();
+      const response = await fetch(requestUrl, {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log("📥 Réponse reçue:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: {
+          'content-type': response.headers.get('content-type'),
+          'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+        }
+      });
+
+      let data;
+      try {
+        data = await response.json();
+        console.log("📋 Données de réponse:", data);
+      } catch (jsonError) {
+        console.error("❌ Erreur parsing JSON:", jsonError);
+        const textResponse = await response.text();
+        console.error("📝 Réponse brute:", textResponse);
+        throw new Error(`Réponse invalide du serveur: ${response.status}`);
+      }
 
       if (!response.ok) {
         console.error("❌ Erreur réponse serveur:", {
@@ -62,7 +104,7 @@ class ContactAPI {
         throw new Error(data.message || `Erreur ${response.status}`);
       }
 
-      console.log("✅ Message de contact envoyé:", {
+      console.log("✅ Message de contact envoyé avec succès:", {
         success: data.success,
         messageId: data.messageId,
         duration: data.duration,
@@ -77,7 +119,10 @@ class ContactAPI {
         status: data.status || 'sent'
       };
     } catch (error) {
-      console.error("❌ Erreur lors de l'envoi du message de contact:", error);
+      console.error("❌ Erreur lors de l'envoi du message de contact:");
+      console.error("Type d'erreur:", error.constructor.name);
+      console.error("Message d'erreur:", error.message);
+      console.error("Stack trace:", error.stack);
       
       // Messages d'erreur plus user-friendly
       let userMessage = "Une erreur est survenue lors de l'envoi du message.";
@@ -89,6 +134,8 @@ class ContactAPI {
           userMessage = "Service temporairement indisponible. Réessayez plus tard.";
         } else if (error.message.includes("timeout") || error.message.includes("Timeout")) {
           userMessage = "La demande prend plus de temps que prévu, mais votre message est en cours de traitement.";
+        } else if (error.message.includes("CORS")) {
+          userMessage = "Problème de connexion avec le serveur. Contactez le support.";
         } else {
           userMessage = error.message;
         }
@@ -101,24 +148,54 @@ class ContactAPI {
     }
   }
 
-  // Test de connectivité avec timeout court
+  // Test simple des variables d'environnement
+  debugConfig() {
+    console.log("🔍 Debug Configuration:");
+    console.log("- URL:", this.notificationServiceUrl);
+    console.log("- API Key présente:", !!this.apiKey);
+    console.log("- API Key preview:", this.apiKey ? this.apiKey.substring(0, 8) + "..." : "MANQUANTE");
+    console.log("- Toutes les variables NEXT_PUBLIC:", 
+      Object.keys(process.env)
+        .filter(key => key.startsWith('NEXT_PUBLIC_'))
+        .reduce((obj, key) => {
+          obj[key] = process.env[key];
+          return obj;
+        }, {})
+    );
+  }
+
+  // Test de connectivité avec plus de debug
   async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
+      console.log("🧪 Test de connectivité vers:", `${this.notificationServiceUrl}/ping`);
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 secondes max
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const response = await fetch(`${this.notificationServiceUrl}/ping`, {
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
+      
+      console.log("📡 Réponse ping:", {
+        status: response.status,
+        ok: response.ok,
+        headers: {
+          'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+          'content-type': response.headers.get('content-type')
+        }
+      });
+      
       const data = await response.json();
+      console.log("📋 Données ping:", data);
       
       return {
         success: response.ok,
         message: data.status || "Service accessible"
       };
     } catch (error) {
+      console.error("❌ Erreur test de connectivité:", error);
       if (error.name === 'AbortError') {
         return {
           success: false,
@@ -127,12 +204,12 @@ class ContactAPI {
       }
       return {
         success: false,
-        message: "Service de notification non disponible"
+        message: `Service de notification non disponible: ${error.message}`
       };
     }
   }
 
-  // Méthode pour valider les données avant envoi
+  // Validation identique à l'original
   validateContactForm(formData: ContactFormData): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
@@ -152,14 +229,12 @@ class ContactAPI {
       errors.push("Le message doit contenir au moins 10 caractères");
     }
 
-    // Validation anti-spam basique
     if (formData.message.includes('http://') || formData.message.includes('https://')) {
-      if (formData.message.split('http').length > 3) { // Plus de 2 liens
+      if (formData.message.split('http').length > 3) {
         errors.push("Trop de liens dans le message");
       }
     }
 
-    // Vérification de longueur maximale
     if (formData.message.length > 2000) {
       errors.push("Le message est trop long (maximum 2000 caractères)");
     }
@@ -179,7 +254,6 @@ class ContactAPI {
     return emailRegex.test(email);
   }
 
-  // Méthode pour formater la catégorie en français
   formatCategory(category: string): string {
     const categoryMap: Record<string, string> = {
       problem: "Problème technique",
@@ -191,7 +265,6 @@ class ContactAPI {
     return categoryMap[category] || category;
   }
 
-  // Méthode pour obtenir l'emoji correspondant à la catégorie
   getCategoryEmoji(category: string): string {
     const emojiMap: Record<string, string> = {
       problem: "🐛",
@@ -203,7 +276,6 @@ class ContactAPI {
     return emojiMap[category] || "💬";
   }
 
-  // Méthode pour obtenir le temps de réponse estimé
   getResponseTime(category: string): string {
     const responseTimeMap: Record<string, string> = {
       problem: "2-4 heures",
