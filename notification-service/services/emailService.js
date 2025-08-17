@@ -1,12 +1,68 @@
 const nodemailer = require("nodemailer");
-const mailjetTransport = require("nodemailer-mailjet-transport");
 const logger = require("../utils/logger");
+
+/* ----------------------------- Utils internes ----------------------------- */
+
+const escapeHtml = (str = "") =>
+  String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const nl2br = (str = "") => escapeHtml(str).replace(/\n/g, "<br/>");
+
+// Catégorie robuste : supporte {label} ou {name} + fallbacks depuis formData
+const resolveCategory = (categoryInfo = {}, formData = {}) => {
+  const key =
+    categoryInfo.key ||
+    (formData.category ? String(formData.category).toLowerCase() : "") ||
+    "other";
+
+  const label =
+    categoryInfo.label ||
+    categoryInfo.name ||
+    formData.categoryLabel ||
+    formData.categoryName ||
+    (key
+      ? {
+          problem: "Problème technique",
+          info: "Demande d'information",
+          suggestion: "Suggestion d'amélioration",
+          feedback: "Retour d'expérience",
+          other: "Autre",
+        }[key] || "Autre"
+      : "Autre");
+
+  const emoji =
+    categoryInfo.emoji ||
+    {
+      problem: "🐛",
+      info: "ℹ️",
+      suggestion: "⭐",
+      feedback: "💚",
+      other: "💬",
+    }[key] ||
+    "💬";
+
+  return { key, label, emoji };
+};
+
+const fmtDateFR = (iso) => {
+  try {
+    return new Date(iso || Date.now()).toLocaleString("fr-FR");
+  } catch {
+    return new Date().toLocaleString("fr-FR");
+  }
+};
+
+/* -------------------------- Logs config Mailjet --------------------------- */
 
 logger.info("🔍 Vérification configuration Mailjet", {
   hasApiKey: !!process.env.MAILJET_API_KEY,
   hasSecret: !!process.env.MAILJET_API_SECRET,
   apiKeyLength: process.env.MAILJET_API_KEY?.length || 0,
-  secretLength: process.env.MAILJET_API_SECRET?.length || 0
+  secretLength: process.env.MAILJET_API_SECRET?.length || 0,
 });
 
 if (!process.env.MAILJET_API_KEY || !process.env.MAILJET_API_SECRET) {
@@ -17,50 +73,41 @@ let transporter = null;
 
 if (process.env.MAILJET_API_KEY && process.env.MAILJET_API_SECRET) {
   try {
-    logger.info("🔧 Création du transporter Mailjet...");
-    
-    const transportConfig = {
-      auth: {
-        apiKey: process.env.MAILJET_API_KEY,
-        apiSecret: process.env.MAILJET_API_SECRET,
-      },
-      pool: false,
-      maxConnections: 1,
-      maxMessages: 1,
-      rateLimit: 1000,
-    };
+    logger.info("🔧 Création du transporter SMTP Mailjet...");
 
-    logger.info("🔧 Configuration transport:", {
-      hasApiKey: !!transportConfig.auth.apiKey,
-      hasSecret: !!transportConfig.auth.apiSecret,
-      pool: transportConfig.pool,
-      maxConnections: transportConfig.maxConnections
+    transporter = nodemailer.createTransport({
+      host: "in-v3.mailjet.com",
+      port: 587,
+      secure: false, // STARTTLS
+      auth: {
+        user: process.env.MAILJET_API_KEY,
+        pass: process.env.MAILJET_API_SECRET,
+      },
     });
 
-    transporter = nodemailer.createTransport(mailjetTransport(transportConfig));
-    
-    logger.info("✅ Transporter Mailjet créé avec succès");
-    
+    logger.info("✅ Transporter SMTP Mailjet créé avec succès");
+
     transporter.verify((error, success) => {
       if (error) {
-        logger.error("❌ Erreur vérification Mailjet", { 
+        logger.error("❌ Erreur vérification SMTP Mailjet", {
           error: error.message,
           code: error.code,
-          command: error.command 
+          command: error.command,
         });
       } else {
-        logger.info("✅ Vérification Mailjet réussie", { success });
+        logger.info("✅ Vérification SMTP Mailjet réussie", { success });
       }
     });
-    
   } catch (error) {
-    logger.error("❌ Erreur création transporter Mailjet", { 
+    logger.error("❌ Erreur création transporter SMTP Mailjet", {
       error: error.message,
-      stack: error.stack 
+      stack: error.stack,
     });
     transporter = null;
   }
 }
+
+/* ------------------------------ Timeout util ----------------------------- */
 
 const withTimeout = (promise, timeoutMs = 30000, operation = "operation") => {
   return Promise.race([
@@ -70,15 +117,18 @@ const withTimeout = (promise, timeoutMs = 30000, operation = "operation") => {
         logger.error(`⏰ Timeout ${operation} après ${timeoutMs}ms`);
         reject(new Error(`Timeout ${operation} après ${timeoutMs}ms`));
       }, timeoutMs);
-      
+
       promise.finally(() => clearTimeout(timeoutId));
-    })
+    }),
   ]);
 };
 
+/* ------------------------------- Templates -------------------------------- */
+
 const createConfirmationEmail = (token) => {
-  const link = `${process.env.FRONTEND_URL}/confirm-account?token=${token}`;
-  
+  const base = process.env.FRONTEND_URL?.replace(/\/+$/, "") || "";
+  const link = `${base}/confirm-account?token=${encodeURIComponent(token)}`;
+
   return {
     subject: "Confirmez votre compte - RoadTrip!",
     html: `
@@ -89,13 +139,13 @@ const createConfirmationEmail = (token) => {
           Confirmer mon compte
         </a>
         <p style="margin-top: 20px; font-size: 14px; color: #666;">
-          Si le bouton ne fonctionne pas, copiez ce lien : ${link}
+          Si le bouton ne fonctionne pas, copiez ce lien : ${escapeHtml(link)}
         </p>
         <p style="margin-top: 20px; font-size: 12px; color: #999;">
           Ce lien expire dans 24 heures.
         </p>
       </div>
-    `
+    `,
   };
 };
 
@@ -108,7 +158,7 @@ const createResetEmail = (code) => {
         <p>Voici votre code de réinitialisation :</p>
         <div style="background: #f5f5f5; padding: 20px; border-radius: 5px; text-align: center; margin: 20px 0;">
           <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #E30613;">
-            ${code}
+            ${escapeHtml(code)}
           </span>
         </div>
         <p style="color: #666;">Ce code expire dans 1 heure.</p>
@@ -116,139 +166,161 @@ const createResetEmail = (code) => {
           Si vous n'avez pas demandé cette réinitialisation, ignorez cet email.
         </p>
       </div>
-    `
+    `,
   };
 };
 
-const createContactSupportEmail = (formData, category_info) => {
+const createContactSupportEmail = (formData, categoryInfoInput) => {
+  const { label, emoji } = resolveCategory(categoryInfoInput, formData);
+
   return {
-    subject: `[${category_info.emoji}${formData.category.toUpperCase()}] ${formData.subject}`,
+    subject: `[${emoji} ${label}] ${formData.subject}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #E30613;">Nouveau message de contact - RoadTrip!</h1>
-        <p><strong>Catégorie :</strong> ${category_info.emoji} ${category_info.name}</p>
+        <p><strong>Catégorie :</strong> ${emoji} ${escapeHtml(label)}</p>
         <hr style="border: 1px solid #ddd; margin: 20px 0;">
         
-        <p><strong>Nom :</strong> ${formData.name}</p>
-        <p><strong>Email :</strong> ${formData.email}</p>
-        <p><strong>Sujet :</strong> ${formData.subject}</p>
-        <p><strong>Date :</strong> ${new Date(formData.timestamp).toLocaleString('fr-FR')}</p>
+        <p><strong>Nom :</strong> ${escapeHtml(formData.name)}</p>
+        <p><strong>Email :</strong> ${escapeHtml(formData.email)}</p>
+        <p><strong>Sujet :</strong> ${escapeHtml(formData.subject)}</p>
+        <p><strong>Date :</strong> ${fmtDateFR(formData.timestamp)}</p>
         
         <div style="background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #333;">Message :</h3>
-          <p style="white-space: pre-wrap; margin-bottom: 0;">${formData.message}</p>
+          <p style="margin-bottom: 0;">${nl2br(formData.message)}</p>
         </div>
         
         <p style="font-size: 12px; color: #999;">
-          Répondez directement à cette adresse : ${formData.email}
+          Répondez directement à cette adresse : ${escapeHtml(formData.email)}
         </p>
       </div>
-    `
+    `,
   };
 };
 
-const createContactConfirmationEmail = (formData) => {
+const createContactConfirmationEmail = (formData, categoryInfoInput) => {
+  const { label } = resolveCategory(categoryInfoInput, formData);
+
   return {
-    subject: "Message reçu - RoadTrip!",
+    subject: `Message reçu — ${label} - RoadTrip!`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #E30613;">Message bien reçu !</h1>
-        <p>Bonjour <strong>${formData.name}</strong>,</p>
+        <p>Bonjour <strong>${escapeHtml(formData.name)}</strong>,</p>
         <p>Nous avons bien reçu votre message concernant :</p>
         
         <div style="background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-          <strong>"${formData.subject}"</strong>
+          <strong>"${escapeHtml(formData.subject)}"</strong> — ${escapeHtml(label)}
         </div>
         
         <p>Notre équipe va examiner votre demande et vous répondra rapidement à cette adresse email.</p>
         <p>Merci de faire confiance à <strong>RoadTrip!</strong></p>
         
         <p style="margin-top: 20px; font-size: 12px; color: #999;">
-          Si vous avez une urgence, contactez-nous au +33 1 23 45 67 89
+          Envoyé le : ${fmtDateFR(formData.timestamp)}
         </p>
       </div>
-    `
+    `,
   };
 };
 
-const createAlertEmail = (alert) => {
+const createAlertEmail = (alert = {}) => {
   const colors = {
-    'CRITICAL': '#ff0000',
-    'WARNING': '#ffaa00', 
-    'INFO': '#00aa00'
+    CRITICAL: "#ff0000",
+    WARNING: "#ffaa00",
+    INFO: "#00aa00",
   };
 
-  const color = colors[alert.severity] || '#cccccc';
+  const severity = String(alert.severity || "INFO").toUpperCase();
+  const color = colors[severity] || "#cccccc";
 
   return {
-    subject: `RoadTrip! Alert: ${alert.severity} - ${alert.service}`,
+    subject: `RoadTrip! Alert: ${severity} - ${alert.service || "unknown"}`,
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: ${color}; color: white; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-          <h1 style="margin: 0; color: white;">🚨 ${alert.severity} Alert</h1>
+          <h1 style="margin: 0; color: white;">🚨 ${escapeHtml(severity)} Alert</h1>
         </div>
         
         <div style="background: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-          <p><strong>Service :</strong> ${alert.service}</p>
-          <p><strong>Problème :</strong> ${alert.message}</p>
-          <p><strong>Heure :</strong> ${alert.timestamp}</p>
-          <p><strong>Sévérité :</strong> ${alert.severity}</p>
+          <p><strong>Service :</strong> ${escapeHtml(alert.service || "unknown")}</p>
+          <p><strong>Problème :</strong> ${escapeHtml(alert.message || "n/a")}</p>
+          <p><strong>Heure :</strong> ${escapeHtml(alert.timestamp || new Date().toISOString())}</p>
+          <p><strong>Sévérité :</strong> ${escapeHtml(severity)}</p>
         </div>
 
-        <p>Vérifiez le dashboard : <a href="${process.env.GRAFANA_URL || 'http://localhost:3100'}" style="color: #E30613;">Grafana</a></p>
+        <p>Vérifiez le dashboard : <a href="${escapeHtml(
+          process.env.GRAFANA_URL || "http://localhost:3100"
+        )}" style="color: #E30613;">Grafana</a></p>
         
         <p style="font-size: 12px; color: #999;">
-          Alert automatique générée par RoadTrip! Monitoring
+          Alerte automatique générée par RoadTrip! Monitoring
         </p>
       </div>
-    `
+    `,
   };
 };
 
+/* ------------------------------- Service ---------------------------------- */
+
 const EmailService = {
-  sendEmail: async ({ to, subject, html, from, text, timeout = 60000 }) => {
+  sendEmail: async ({
+    to,
+    subject,
+    html,
+    from,
+    text,
+    replyTo,
+    timeout = 60000,
+  }) => {
     const startTime = Date.now();
-    const operationId = `email-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    
+    const operationId = `email-${Date.now()}-${Math.random()
+      .toString(36)
+      .substr(2, 6)}`;
+
     logger.info("🚀 Début envoi email", {
       operationId,
       to: Array.isArray(to) ? to.join(", ") : to,
       subject,
       timeout: `${timeout}ms`,
       hasTransporter: !!transporter,
-      transporterType: transporter ? 'mailjet' : 'simulation'
+      transporterType: transporter ? "mailjet" : "simulation",
     });
-    
+
     if (!transporter) {
       logger.warn("📧 Mode simulation - Mailjet non configuré", {
         operationId,
         to: Array.isArray(to) ? to.join(", ") : to,
-        subject 
+        subject,
       });
-      
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
       const duration = Date.now() - startTime;
       return {
         messageId: `simulated-${operationId}`,
         accepted: [to],
         response: "250 Message simulated",
         duration,
-        simulated: true
+        simulated: true,
       };
     }
 
     try {
       const mailOptions = {
-        from: from || `"${process.env.EMAIL_FROM_NAME || 'RoadTrip! Support'}" <${process.env.EMAIL_FROM_ADDRESS || 'noreply@roadtrip.fr'}>`,
+        from:
+          from ||
+          `"${process.env.EMAIL_FROM_NAME || "RoadTrip! Support"}" <${
+            process.env.EMAIL_FROM_ADDRESS || "noreply@roadtrip.fr"
+          }>`,
         to: Array.isArray(to) ? to.join(", ") : to,
         subject,
-        html
+        html,
       };
 
-      if (text) {
-        mailOptions.text = text;
-      }
+      if (text) mailOptions.text = text;
+      if (replyTo) mailOptions.replyTo = replyTo;
 
       logger.info("📤 Options email préparées", {
         operationId,
@@ -257,12 +329,13 @@ const EmailService = {
         subject: mailOptions.subject,
         hasHtml: !!mailOptions.html,
         hasText: !!mailOptions.text,
-        htmlLength: mailOptions.html?.length || 0
+        replyTo: mailOptions.replyTo,
+        htmlLength: mailOptions.html?.length || 0,
       });
 
-      logger.info("📨 Lancement envoi email via Mailjet", { 
+      logger.info("📨 Lancement envoi email via Mailjet", {
         operationId,
-        timeout: `${timeout}ms`
+        timeout: `${timeout}ms`,
       });
 
       const result = await withTimeout(
@@ -274,7 +347,7 @@ const EmailService = {
                 error: error.message,
                 code: error.code,
                 command: error.command,
-                response: error.response
+                response: error.response,
               });
               reject(error);
             } else {
@@ -283,7 +356,7 @@ const EmailService = {
                 messageId: info.messageId,
                 response: info.response,
                 accepted: info.accepted?.length || 0,
-                rejected: info.rejected?.length || 0
+                rejected: info.rejected?.length || 0,
               });
               resolve(info);
             }
@@ -303,24 +376,23 @@ const EmailService = {
         duration: `${duration}ms`,
         accepted: result.accepted?.length || 0,
         rejected: result.rejected?.length || 0,
-        response: result.response
+        response: result.response,
       });
 
       return { ...result, duration, operationId };
-
     } catch (err) {
       const duration = Date.now() - startTime;
-      
+
       logger.error("💥 Erreur lors de l'envoi de l'email", {
         operationId,
         to: Array.isArray(to) ? to.join(", ") : to,
         subject,
         error: err.message,
         duration: `${duration}ms`,
-        isTimeout: err.message.includes('Timeout'),
+        isTimeout: err.message.includes("Timeout"),
         errorCode: err.code,
         errorCommand: err.command,
-        errorResponse: err.response
+        errorResponse: err.response,
       });
 
       throw err;
@@ -333,7 +405,7 @@ const EmailService = {
       to: email,
       subject,
       html,
-      timeout: 45000
+      timeout: 45000,
     });
   },
 
@@ -343,27 +415,32 @@ const EmailService = {
       to: email,
       subject,
       html,
-      timeout: 45000
+      timeout: 45000,
     });
   },
 
-  sendContactSupportEmail: async (formData, category_info) => {
-    const { subject, html } = createContactSupportEmail(formData, category_info);
+  sendContactSupportEmail: async (formData, categoryInfo) => {
+    const { subject, html } = createContactSupportEmail(formData, categoryInfo);
     return await EmailService.sendEmail({
       to: process.env.CONTACT_RECEIVE_EMAIL || "contact@roadtrip.com",
       subject,
       html,
-      timeout: 45000
+      // ✅ répondre à l'utilisateur renvoie directement au bon destinataire
+      replyTo: formData.email,
+      timeout: 45000,
     });
   },
 
-  sendContactConfirmationEmail: async (formData) => {
-    const { subject, html } = createContactConfirmationEmail(formData);
+  sendContactConfirmationEmail: async (formData, categoryInfo) => {
+    const { subject, html } = createContactConfirmationEmail(
+      formData,
+      categoryInfo
+    );
     return await EmailService.sendEmail({
       to: formData.email,
       subject,
       html,
-      timeout: 30000
+      timeout: 30000,
     });
   },
 
@@ -373,26 +450,26 @@ const EmailService = {
       to: email,
       subject,
       html,
-      timeout: 30000
+      timeout: 30000,
     });
   },
 
   testMailjetConnection: async () => {
     if (!transporter) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         message: "Mailjet non configuré - mode simulation actif",
         details: {
           hasApiKey: !!process.env.MAILJET_API_KEY,
-          hasSecret: !!process.env.MAILJET_API_SECRET
-        }
+          hasSecret: !!process.env.MAILJET_API_SECRET,
+        },
       };
     }
 
     try {
       logger.info("🧪 Test connexion Mailjet détaillé...");
       const startTime = Date.now();
-      
+
       const result = await withTimeout(
         new Promise((resolve, reject) => {
           transporter.verify((error, success) => {
@@ -406,38 +483,38 @@ const EmailService = {
         15000,
         "test connexion"
       );
-      
+
       const duration = Date.now() - startTime;
-      
-      logger.info("✅ Test Mailjet réussi", { 
+
+      logger.info("✅ Test Mailjet réussi", {
         duration: `${duration}ms`,
-        result 
+        result,
       });
-      
-      return { 
-        success: true, 
+
+      return {
+        success: true,
         message: "Configuration Mailjet OK",
         duration: `${duration}ms`,
-        details: result
+        details: result,
       };
     } catch (error) {
-      logger.error("❌ Test Mailjet échoué", { 
+      logger.error("❌ Test Mailjet échoué", {
         error: error.message,
         code: error.code,
-        command: error.command
+        command: error.command,
       });
-      
-      return { 
-        success: false, 
+
+      return {
+        success: false,
         message: `Test Mailjet échoué: ${error.message}`,
         error: {
           message: error.message,
           code: error.code,
-          command: error.command
-        }
+          command: error.command,
+        },
       };
     }
-  }
+  },
 };
 
 module.exports = EmailService;
