@@ -23,22 +23,27 @@ const corsOptions = {
   },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "x-api-key"],
+  credentials: false, // Explicitement défini
   maxAge: 86400,
+  preflightContinue: false, // Passe le contrôle au handler suivant
+  optionsSuccessStatus: 204 // Certains navigateurs anciens ont des problèmes avec 200
 };
 
-// Active CORS pour toutes les routes du router
+// Active CORS pour toutes les routes du router - AVANT toute autre middleware
 router.use(cors(corsOptions));
 
-// Répondre proprement à TOUTES les requêtes OPTIONS sans déclarer de route .options()
-router.use((req, res, next) => {
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  next();
-});
+// SUPPRIMÉ : Le middleware OPTIONS redondant qui causait le conflit
+// router.use((req, res, next) => {
+//   if (req.method === "OPTIONS") return res.sendStatus(204);
+//   next();
+// });
 
-// --- Middleware API Key ---
+// --- Middleware API Key (modifié pour mieux gérer OPTIONS) ---
 const requireApiKey = (req, res, next) => {
-  // Ne bloque JAMAIS le preflight
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+  // Ignore la vérification de l'API key pour les requêtes preflight - le middleware CORS s'en occupe
+  if (req.method === "OPTIONS") {
+    return next();
+  }
 
   const apiKey = req.headers["x-api-key"];
   if (!apiKey || apiKey !== process.env.NOTIFICATION_API_KEY) {
@@ -300,7 +305,7 @@ router.post("/api/contact/send", requireApiKey, async (req, res) => {
 
   process.nextTick(async () => {
     try {
-      // ✅ Passe la catégorie normalisée + label à l’EmailService
+      // ✅ Passe la catégorie normalisée + label à l'EmailService
       await EmailService.sendContactSupportEmail(formData, categoryInfo);
       await EmailService.sendContactConfirmationEmail(formData, categoryInfo);
       logger.info("✅ Emails de contact envoyés avec succès", {
