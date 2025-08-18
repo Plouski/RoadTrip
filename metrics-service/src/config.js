@@ -12,7 +12,7 @@ const PROMETHEUS_URL = process.env.PROMETHEUS_URL ||
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 
   (NODE_ENV === 'production' ? 
-    'https://road-trip-iota.vercel.app' : 
+    'https://road-trip-gamma.vercel.app' : 
     'http://localhost:3000');
 
 const SERVICE_VERSION = process.env.SERVICE_VERSION || "1.0.0";

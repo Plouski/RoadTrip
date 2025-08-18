@@ -24,7 +24,7 @@ if (!process.env.OPENAI_API_KEY && process.env.NODE_ENV !== 'test' && process.en
 }
 
 const allowedOrigins = [
-  "https://road-trip-iota.vercel.app",
+  "https://road-trip-gamma.vercel.app",
   "http://localhost:3000",
   "https://localhost:3000",
   "http://localhost:3001",

@@ -36,7 +36,7 @@ app.use(helmet());
 
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://road-trip-iota.vercel.app',
+  'https://road-trip-gamma.vercel.app',
 ];
 
 app.use(

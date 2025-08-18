@@ -31,7 +31,7 @@ updateExternalServiceHealth("free_mobile", smsConfigured);
 app.use(helmet());
 app.use(
   cors({
-    origin: ["https://road-trip-iota.vercel.app", "http://localhost:3000"],
+    origin: ["https://road-trip-gamma.vercel.app", "http://localhost:3000"],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Origin", "X-Requested-With", "Content-Type", "Accept", "Authorization", "x-api-key"],
     credentials: false,

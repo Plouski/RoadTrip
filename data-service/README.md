@@ -215,7 +215,7 @@ data-service/
 
 - **JWT obligatoire** sur routes protégées (middleware authMiddleware)
 - **Roles** via roleMiddleware (admin / premium / user)
-- **CORS** : http://localhost:3000 et https://road-trip-iota.vercel.app
+- **CORS** : http://localhost:3000 et https://road-trip-gamma.vercel.app
 - **notification-service** : appels sortants protégés via header x-api-key
 
 ---

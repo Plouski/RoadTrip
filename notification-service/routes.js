@@ -9,7 +9,7 @@ const router = express.Router();
 const SERVICE_NAME = "notification-service";
 
 const allowedOrigins = [
-  "https://road-trip-iota.vercel.app",
+  "https://road-trip-gamma.vercel.app",
   "http://localhost:3000",
   "https://localhost:3000",
   "http://localhost:3001",
