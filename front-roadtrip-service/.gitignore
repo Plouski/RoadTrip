@@ -25,8 +25,7 @@ yarn.lock
 # Test coverage
 coverage/
 
-# Build Tailwind (si applicable)
-tailwind.config.ts
+# Build Tailwind
 postcss.config.js
 
 # IntelliJ / VS Code

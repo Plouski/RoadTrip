@@ -28,7 +28,7 @@
   }
 
   *, ::before, ::after {
-    @apply border;
+    @apply border-border;
     box-sizing: border-box;
   }
 
