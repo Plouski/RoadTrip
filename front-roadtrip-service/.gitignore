@@ -1,0 +1,38 @@
+# Node modules
+node_modules/
+
+# Output de Next.js
+.next/
+out/
+
+# Environnement
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Fichiers de lock si tu choisis un seul gestionnaire :
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Test coverage
+coverage/
+
+# Build Tailwind (si applicable)
+tailwind.config.ts
+postcss.config.js
+
+# IntelliJ / VS Code
+.idea/
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db

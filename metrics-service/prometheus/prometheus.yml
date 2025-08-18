@@ -1,0 +1,42 @@
+# Configuration Prometheus pour microservices en Docker
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # Prometheus lui-même
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Services applicatifs
+  - job_name: 'ai-service'
+    static_configs:
+      - targets: ['ai-service:5003']
+    metrics_path: '/metrics'
+
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:5001']
+    metrics_path: '/metrics'
+
+  - job_name: 'data-service'
+    static_configs:
+      - targets: ['data-service:5002']
+    metrics_path: '/metrics'
+
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:5005']
+    metrics_path: '/metrics'
+
+  - job_name: 'paiement-service'
+    static_configs:
+      - targets: ['paiement-service:5004']
+    metrics_path: '/metrics'
+
+  - job_name: 'metrics-service'
+    static_configs:
+      - targets: ['metrics-service:5006']
+    metrics_path: '/metrics'
