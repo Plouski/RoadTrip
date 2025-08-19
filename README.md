@@ -3,8 +3,6 @@
 > **Écosystème complet de planification de voyages basé sur une architecture microservices**  
 > _Projet M2 - Certification RNCP39583 - Expert en Développement Logiciel_
 
-**Le site de RoadTrip! en ligne** : https://road-trip-gamma.vercel.app/
-
 ## 📋 Vue d'ensemble
 
 RoadTrip! est une plateforme moderne de planification de voyages construite avec une architecture microservices. Elle permet aux utilisateurs de découvrir, planifier et partager leurs aventures de voyage grâce à l'intelligence artificielle.
