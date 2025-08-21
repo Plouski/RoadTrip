@@ -77,7 +77,7 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  logger.error("💥 Erreur non gérée", {
+  logger.error("Erreur non gérée", {
     message: err.message,
     stack: err.stack,
     path: req.originalUrl,
@@ -102,7 +102,7 @@ app.use((err, req, res, next) => {
 /* Démarrage */
 function startServer() {
   const server = app.listen(PORT, "0.0.0.0", () => {
-    logger.info(`✅ ${SERVICE_NAME} démarré`, {
+    logger.info(`${SERVICE_NAME} démarré`, {
       port: PORT,
       environment: process.env.NODE_ENV || "development",
       logLevel: logger.level,
@@ -113,14 +113,40 @@ function startServer() {
     updateServiceHealth(SERVICE_NAME, true);
   });
 
+  if (process.env.NODE_ENV === 'production') {
+    logger.info('Activation du keepalive pour environnement de production');
+    
+    setInterval(() => {
+      logger.info('Service keepalive - maintaining activity');
+    }, 10 * 60 * 1000);
+
+    setInterval(() => {
+      const used = process.memoryUsage();
+      logger.info('Resource monitoring', {
+        memory: {
+          rss: Math.round(used.rss / 1024 / 1024) + 'MB',
+          heapUsed: Math.round(used.heapUsed / 1024 / 1024) + 'MB'
+        },
+        uptime: Math.floor(process.uptime()) + 's',
+        connections: currentConnections,
+        timestamp: new Date().toISOString()
+      });
+    }, 5 * 60 * 1000);
+  }
+
   function gracefulShutdown(signal) {
-    logger.info(`🔄 Arrêt ${SERVICE_NAME}`, { signal });
+    logger.info(`Arrêt ${SERVICE_NAME}`, { 
+      signal, 
+      timestamp: new Date().toISOString(),
+      reason: 'Signal received',
+      uptime: process.uptime()
+    });
     updateServiceHealth(SERVICE_NAME, false);
     updateActiveConnections(0);
 
     server.close(() => {
-      logger.info("📴 Serveur fermé");
-      logger.info(`✅ ${SERVICE_NAME} arrêté proprement`);
+      logger.info("Serveur fermé");
+      logger.info(`${SERVICE_NAME} arrêté proprement`);
       process.exit(0);
     });
 
@@ -130,8 +156,24 @@ function startServer() {
     }, 10000);
   }
 
-  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  process.on("SIGTERM", (signal) => {
+    logger.warn('SIGTERM reçu de Render/Docker', { signal, source: 'platform' });
+    gracefulShutdown("SIGTERM");
+  });
+  
+  process.on("SIGINT", (signal) => {
+    logger.warn('SIGINT reçu', { signal, source: 'user' });
+    gracefulShutdown("SIGINT");
+  });
+
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception', { error: error.message, stack: error.stack });
+    gracefulShutdown('uncaughtException');
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled Rejection', { reason, promise });
+  });
 
   return { server };
 }
