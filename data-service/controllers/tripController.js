@@ -102,19 +102,14 @@ class TripController {
         tripData.itinerary = tripData.itinerary?.map(step => ({
           day: step.day,
           title: step.title,
-          description: step.description ? step.description.substring(0, 100) + "..." : "",
+          description: step.description,
           overnight: step.overnight
-        })) || [];
-        
-        tripData.pointsOfInterest = tripData.pointsOfInterest?.slice(0, 2).map(poi => ({
-          ...poi,
-          description: poi.description ? poi.description.substring(0, 80) + "..." : ""
         })) || [];
 
         tripData.premiumNotice = {
           message: "Certaines informations sont réservées aux utilisateurs premium.",
-          callToAction: "Abonnez-vous pour débloquer l'itinéraire complet, la carte interactive et les conseils d'expert.",
-          missingFeatures: ["Itinéraire détaillé", "Carte interactive", "Conseils d'expert", "Tous les points d'intérêt"]
+          callToAction: "Abonnez-vous pour débloquer l'itinéraire complet.",
+          missingFeatures: ["Itinéraire détaillé"]
         };
       }
 

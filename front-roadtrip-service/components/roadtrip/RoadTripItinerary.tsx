@@ -56,7 +56,7 @@ export function PremiumItineraryLocked() {
         </div>
         <Title level={3} className="mb-4 sm:mb-6">Contenu réservé aux membres Premium</Title>
         <Paragraph size="base" align="center" className="max-w-xl mb-6 sm:mb-8 px-4 sm:px-0">
-          Débloquez l'accès à l'itinéraire détaillé, la carte interactive, les conseils exclusifs et bien plus encore.
+          Débloquez l'accès à l'itinéraire détaillé.
         </Paragraph>
         <Link href="/premium">
           <Button className="px-6 sm:px-8 py-3">Passer à Premium</Button>

@@ -99,7 +99,8 @@ export function useRoadtripForm(options?: {
   const [tempPointOfInterest, setTempPointOfInterest] =
     useState<PointOfInterest>(INITIAL_POI_STATE);
 
-  const hydratedRef = useRef(false);
+  // Flag pour savoir si l'initialisation est terminée
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Utils
   const showAlert = useCallback(
@@ -125,44 +126,76 @@ export function useRoadtripForm(options?: {
     (index: number, field: keyof ItineraryStep, value: any) => {
       setItineraryInputs((prev) => {
         const updated = [...prev];
-        updated[index] = { ...updated[index], [field]: value };
+        if (updated[index]) {
+          updated[index] = { ...updated[index], [field]: value };
+        }
         return updated;
       });
     },
     []
   );
 
+  // Fonction pour générer les étapes d'itinéraire en préservant l'existant
+  const generateItinerarySteps = useCallback((duration: number, existing: ItineraryStep[] = []): ItineraryStep[] => {
+    console.log(`Generating ${duration} steps, preserving ${existing.length} existing steps`);
+    
+    return Array.from({ length: duration }, (_, i) => {
+      const day = i + 1;
+      const existingStep = existing.find(step => step.day === day);
+      
+      if (existingStep) {
+        console.log(`Day ${day}: preserving existing step - ${existingStep.title}`);
+        return existingStep;
+      } else {
+        console.log(`Day ${day}: creating new empty step`);
+        return {
+          day,
+          title: "",
+          description: "",
+          overnight: true,
+        };
+      }
+    });
+  }, []);
+
+  // Initialisation des données
   useEffect(() => {
+    console.log("Initializing form with mode:", mode);
+    
     if (options?.initialData) {
+      console.log("Setting initial roadtrip data:", options.initialData);
       setRoadtrip((prev) => ({ ...prev, ...options.initialData! }));
     }
-    if (options?.initialItinerary && options.initialItinerary.length > 0) {
-      setItineraryInputs(options.initialItinerary);
+    
+    if (mode === "edit" && options?.initialItinerary && options.initialItinerary.length > 0) {
+      console.log("Setting initial itinerary data:", options.initialItinerary);
+      const duration = options?.initialData?.duration || 7;
+      const fullItinerary = generateItinerarySteps(duration, options.initialItinerary);
+      setItineraryInputs(fullItinerary);
+    } else if (mode === "create") {
+      // En mode création, générer l'itinéraire pour la durée par défaut
+      const initialItinerary = generateItinerarySteps(INITIAL_ROADTRIP_STATE.duration);
+      setItineraryInputs(initialItinerary);
     }
-    // Marque l’hydratation comme faite pour ne pas écraser les données
-    hydratedRef.current = true;
-  }, [options?.initialData, options?.initialItinerary]);
+    
+    setIsInitialized(true);
+  }, [mode, options?.initialData, options?.initialItinerary, generateItinerarySteps]);
 
-  // génération auto quand la durée change (conserve l'existant)
+  // Régénération de l'itinéraire quand la durée change (uniquement après initialisation)
   useEffect(() => {
-    // Ne régénère pas tant que l’hydratation n’est pas faite (en mode edit)
-    if (!hydratedRef.current) return;
+    if (!isInitialized) {
+      console.log("Skipping duration effect - not initialized yet");
+      return;
+    }
 
-    const generate = (d: number): ItineraryStep[] =>
-      Array.from({ length: d }, (_, i) => ({
-        day: i + 1,
-        title: "",
-        description: "",
-        overnight: true,
-      }));
-
-    // Utilise la forme fonctionnelle pour éviter les closures périmées
-    setItineraryInputs((curr) => {
-      const base = generate(roadtrip.duration);
-      return base.map((s) => curr.find((c) => c.day === s.day) || s);
+    console.log(`Duration changed to: ${roadtrip.duration}, current itinerary has ${itineraryInputs.length} steps`);
+    
+    setItineraryInputs(prev => {
+      const newItinerary = generateItinerarySteps(roadtrip.duration, prev);
+      console.log("New itinerary generated:", newItinerary.map(step => `Day ${step.day}: ${step.title || '(empty)'}`));
+      return newItinerary;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roadtrip.duration]);
+  }, [roadtrip.duration, isInitialized, generateItinerarySteps]);
 
   // Tags
   const handleTagToggle = useCallback((tag: string) => {
@@ -183,11 +216,16 @@ export function useRoadtripForm(options?: {
       showAlert("Veuillez remplir tous les champs du point d'intérêt", "error");
       return;
     }
+    
+    console.log("Adding POI:", tempPointOfInterest);
+    
     setRoadtrip((prev) => ({
       ...prev,
       pointsOfInterest: [...prev.pointsOfInterest, { ...tempPointOfInterest }],
     }));
+    
     setTempPointOfInterest(INITIAL_POI_STATE);
+    showAlert("Point d'intérêt ajouté avec succès", "success");
   }, [tempPointOfInterest, showAlert]);
 
   const removePointOfInterest = useCallback((index: number) => {
@@ -195,9 +233,10 @@ export function useRoadtripForm(options?: {
       ...prev,
       pointsOfInterest: prev.pointsOfInterest.filter((_, i) => i !== index),
     }));
-  }, []);
+    showAlert("Point d'intérêt supprimé", "success");
+  }, [showAlert]);
 
-  // Upload d’images (main / poi)
+  // Upload d'images (main / poi)
   const handleImageUpload = useCallback(
     async (type: "main" | "poi", index?: number) => {
       const input = document.createElement("input");
@@ -207,22 +246,29 @@ export function useRoadtripForm(options?: {
         const file = (event.target as HTMLInputElement).files?.[0];
         if (!file) return;
         try {
+          console.log(`Uploading ${type} image${index !== undefined ? ` for index ${index}` : ''}`);
           const imageUrl = await uploadImageToCloudinary(file);
+          
           if (type === "main") {
             updateRoadtripField("image", imageUrl);
           } else {
             if (index === undefined) {
+              // Pour tempPOI
               setTempPointOfInterest((prev) => ({ ...prev, image: imageUrl }));
             } else {
+              // Pour un POI existant
               setRoadtrip((prev) => {
                 const updatedPOIs = [...prev.pointsOfInterest];
-                updatedPOIs[index].image = imageUrl;
+                if (updatedPOIs[index]) {
+                  updatedPOIs[index] = { ...updatedPOIs[index], image: imageUrl };
+                }
                 return { ...prev, pointsOfInterest: updatedPOIs };
               });
             }
           }
+          showAlert("Image uploadée avec succès", "success");
         } catch (e) {
-          console.error(e);
+          console.error("Upload error:", e);
           showAlert("Erreur lors de l'upload de l'image", "error");
         }
       };
@@ -263,10 +309,11 @@ export function useRoadtripForm(options?: {
         }
         break;
       case "itinerary":
-        if (
-          itineraryInputs.find((s) => !s.title.trim() || !s.description.trim())
-        ) {
-          showAlert("Complétez toutes les étapes de l'itinéraire", "error");
+        const incompleteSteps = itineraryInputs.filter(
+          (s) => !s.title.trim() || !s.description.trim()
+        );
+        if (incompleteSteps.length > 0) {
+          showAlert(`Complétez toutes les étapes de l'itinéraire (${incompleteSteps.length} étapes incomplètes)`, "error");
           return false;
         }
         break;
@@ -327,7 +374,21 @@ export function useRoadtripForm(options?: {
       !!roadtrip.bestSeason &&
       roadtrip.tags.length > 0 &&
       roadtrip.pointsOfInterest.length > 0 &&
+      itineraryInputs.length > 0 &&
       itineraryInputs.every((s) => s.title.trim() && s.description.trim());
+
+    if (!requiredOk) {
+      console.log("Validation failed:", {
+        title: !!roadtrip.title.trim(),
+        country: !!roadtrip.country,
+        description: !!roadtrip.description.trim(),
+        bestSeason: !!roadtrip.bestSeason,
+        tags: roadtrip.tags.length > 0,
+        pointsOfInterest: roadtrip.pointsOfInterest.length > 0,
+        itinerary: itineraryInputs.length > 0,
+        itineraryComplete: itineraryInputs.every((s) => s.title.trim() && s.description.trim())
+      });
+    }
 
     return requiredOk;
   }, [roadtrip, itineraryInputs]);
@@ -355,6 +416,14 @@ export function useRoadtripForm(options?: {
           })),
           duration: Number(roadtrip.duration) || 0,
         };
+
+        console.log("Saving roadtrip:", {
+          mode,
+          editId,
+          pointsCount: payload.pointsOfInterest.length,
+          itineraryCount: payload.itinerary.length,
+          publish
+        });
 
         if (mode === "edit" && editId) {
           await AdminService.updateRoadtrip(editId, payload);
@@ -385,7 +454,7 @@ export function useRoadtripForm(options?: {
           }, 1200);
         }
       } catch (e) {
-        console.error(e);
+        console.error("Save error:", e);
         showAlert("Erreur lors de la sauvegarde du roadtrip", "error");
       } finally {
         setIsSaving(false);
