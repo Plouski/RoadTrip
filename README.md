@@ -75,6 +75,7 @@ Frontend (Next.js)          Monitoring Stack
 
 - **Docker & Docker Compose** (recommandé)
 - **Node.js 20+** (pour développement local)
+- **Stripe CLI** (pour les webhooks en développement)
 - **Comptes API** : OpenAI, Stripe, Mailjet, Free Mobile
 
 ### Installation complète avec Docker
@@ -91,8 +92,26 @@ cp .env.example .env
 # 3. Lancer tous les services
 docker-compose up -d
 
-# 4. Vérifier que tous les services sont UP
+# 4. Configurer les webhooks Stripe (OBLIGATOIRE)
+# Dans un nouveau terminal
+stripe listen --forward-to localhost:5004/webhook
+
+# 5. Vérifier que tous les services sont UP
 curl -s http://localhost:5006/api/services/status
+```
+
+### ⚠️ Configuration Stripe Webhook (CRITIQUE)
+
+Pour que les paiements fonctionnent correctement, vous DEVEZ lancer Stripe CLI en parallèle :
+
+```bash
+# Terminal dédié pour Stripe
+stripe login
+stripe listen --forward-to localhost:5004/webhook
+
+# La commande affichera un webhook secret comme :
+# whsec_1234567890abcdef...
+# Copiez ce secret dans votre .env : STRIPE_WEBHOOK_SECRET
 ```
 
 ### Accès aux interfaces
@@ -159,11 +178,18 @@ curl -s http://localhost:5006/api/services/status
 - Système de remboursement
 - Changement de plans
 
+**⚠️ Prérequis Webhooks :**
+```bash
+# OBLIGATOIRE : Lancer Stripe CLI en parallèle
+stripe listen --forward-to localhost:5004/webhook
+```
+
 **API Principales :**
 - `POST /subscription/checkout` - Créer session paiement
 - `GET /subscription/current` - Abonnement actuel
 - `PUT /subscription/change-plan` - Changer de plan
 - `DELETE /subscription/cancel` - Annuler abonnement
+- `POST /webhook` - **Endpoint webhook Stripe (écouté par Stripe CLI)**
 
 ### 📧 Notification Service (Port: 5005)
 **Responsabilité** : Communications
@@ -265,6 +291,9 @@ Chaque service expose :
 # Lancer stack complète
 docker-compose up -d
 
+# Lancer Stripe CLI (terminal séparé)
+stripe listen --forward-to localhost:5004/webhook
+
 # Logs en temps réel
 docker-compose logs -f
 
@@ -288,6 +317,7 @@ CORS_ORIGIN=http://localhost:3000
 
 # DATABASE CONFIGURATION
 MONGODB_URI=mongodb+srv://admin:password123@cluster0.f5kut.mongodb.net/roadtrip?retryWrites=true&w=majority&appName=Cluster0
+
 # JWT CONFIGURATION (PARTAGÉ ENTRE TOUS LES SERVICES)
 JWT_SECRET=roadTripTopSecret2024ChangeInProduction
 JWT_REFRESH_SECRET=refreshTopsecret2024ChangeInProduction
@@ -321,7 +351,7 @@ OPENAI_API_KEY=sk-your-openai-api-key-here
 
 # Stripe
 STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
-STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_from_stripe_cli
 STRIPE_PRICE_MONTHLY_ID=price_your_monthly_price_id
 STRIPE_PRICE_ANNUAL_ID=price_your_annual_price_id
 
@@ -346,6 +376,7 @@ GRAFANA_API_KEY=your-grafana-api-key
 ### Démarrage
 
 ```bash
+# Démarrer les services (7 terminaux)
 cd data-service && npm run dev        # Terminal 1
 cd auth-service && npm run dev        # Terminal 2  
 cd notification-service && npm run dev # Terminal 3
@@ -353,7 +384,17 @@ cd ai-service && npm run dev          # Terminal 4
 cd paiement-service && npm run dev    # Terminal 5
 cd metrics-service && npm run dev     # Terminal 6
 cd front-roadtrip-service && npm run dev # Terminal 7
+
+# Stripe CLI (Terminal)
+stripe listen --forward-to localhost:5004/webhook
 ```
+
+### ⚠️ Étapes Critiques Développement Local
+
+1. **Services** : Tous les services doivent être UP
+2. **Stripe CLI** : OBLIGATOIRE pour les paiements
+3. **Variables d'environnement** : Bien configurées dans tous les services
+4. **Base de données** : MongoDB Atlas accessible
 
 ### Avantages du développement local
 - **Debug facile** : Logs directement dans le terminal
@@ -406,7 +447,8 @@ npm test -- --coverage
 | 401 sur toutes les APIs | JWT invalide | Vérifier `JWT_SECRET` dans tous les .env |
 | IA indisponible | OpenAI API down/quota | Vérifier `OPENAI_API_KEY` et crédits |
 | Emails non envoyés | Mailjet mal configuré | Vérifier `MAILJET_API_KEY/SECRET` |
-| Paiements échouent | Stripe mal configuré | Vérifier clés Stripe et webhook |
+| Paiements échouent | Stripe CLI pas lancé | `stripe listen --forward-to localhost:5004/webhook` |
+| Webhooks Stripe timeout | Port 5004 inaccessible | Vérifier service paiement UP |
 | Prometheus vide | Services pas scrapés | Vérifier `prometheus.yml` et réseau |
 
 ### Health Checks Rapides
@@ -423,6 +465,24 @@ curl -s http://localhost:5006/api/dashboard
 
 # Métriques Prometheus
 curl -s http://localhost:9090/api/v1/targets
+
+# Tester webhook Stripe (après avoir lancé stripe listen)
+curl -X POST http://localhost:5004/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"test": "webhook"}'
+```
+
+### Debugging Stripe
+
+```bash
+# Vérifier que Stripe CLI écoute bien
+stripe listen --list
+
+# Tester un webhook manuellement
+stripe events resend evt_test_webhook
+
+# Vérifier les logs Stripe
+stripe logs tail
 ```
 
 ---
