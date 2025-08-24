@@ -3,6 +3,8 @@
 > **Écosystème complet de planification de voyages basé sur une architecture microservices**  
 > _Projet M2 - Certification RNCP39583 - Expert en Développement Logiciel_
 
+Lien de production en ligne (Vercel) : https://road-trip-gamma.vercel.app/
+
 ## 📋 Vue d'ensemble
 
 RoadTrip! est une plateforme moderne de planification de voyages construite avec une architecture microservices. Elle permet aux utilisateurs de découvrir, planifier et partager leurs aventures de voyage grâce à l'intelligence artificielle.
@@ -116,7 +118,7 @@ stripe listen --forward-to localhost:5004/webhook
 
 ### Accès aux interfaces
 
-- **Frontend** : http://localhost:3000
+- **Frontend** : http://localhost:3000 (admin@gmail.com/Admin123456!)
 - **Grafana** : http://localhost:3100 (admin/admin123)
 - **Prometheus** : http://localhost:9090
 - **Metrics Dashboard** : http://localhost:5006/api/dashboard
