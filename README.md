@@ -4,6 +4,9 @@
 > _Projet M2 - Certification RNCP39583 - Expert en Développement Logiciel_
 
 Lien de production en ligne (Vercel) : https://road-trip-gamma.vercel.app/
+⚠️ **Statut de la production :**  
+Le lien de production n’est actuellement plus actif suite à l’arrêt du service `data-service` hébergé sur Render.  
+L’application reste entièrement fonctionnelle en environnement local via Docker (voir section Démarrage Rapide).
 
 ## 📋 Vue d'ensemble
 
