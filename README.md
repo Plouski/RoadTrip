@@ -3,11 +3,13 @@
 > **Écosystème complet de planification de voyages basé sur une architecture microservices**  
 > _Projet M2 - Certification RNCP39583 - Expert en Développement Logiciel_
 
-Lien de production en ligne (Vercel) : https://road-trip-gamma.vercel.app/
+## 🌐 Déploiement
 
-⚠️ **Statut de la production :**  
-Le lien de production n’est actuellement plus actif suite à l’arrêt du service `data-service` hébergé sur Render.  
+L’ancienne version déployée sur Vercel n’est actuellement plus active suite à l’arrêt du service `data-service` hébergé sur Render.
+
 L’application reste entièrement fonctionnelle en environnement local via Docker (voir section Démarrage Rapide).
+
+---
 
 ## 📋 Vue d'ensemble
 
@@ -21,6 +23,57 @@ RoadTrip! est une plateforme moderne de planification de voyages construite avec
 - **📧 Notifications Multi-Canal** : Emails et SMS transactionnels
 - **⭐ Système de Favoris** : Sauvegarde et partage d'itinéraires
 - **📊 Monitoring Complet** : Prometheus, Grafana, Loki pour l'observabilité
+
+---
+
+## 👩‍💻 Mon rôle dans ce projet
+
+Ce projet a été conçu et développé dans le cadre de mon Master 2.
+
+J’ai réalisé :
+
+- Conception de l’architecture microservices
+- Développement du frontend avec Next.js
+- Développement des APIs backend avec Node.js / Express
+- Intégration de l’IA avec OpenAI
+- Mise en place de l’authentification OAuth
+- Intégration des paiements Stripe
+- Mise en place du monitoring avec Prometheus et Grafana
+- Containerisation avec Docker
+
+---
+
+## 🛠 Stack technique
+
+- **Frontend** : Next.js, React, Tailwind CSS
+- **Backend** : Node.js, Express
+- **Base de données** : MongoDB
+- **IA** : OpenAI
+- **Paiement** : Stripe
+- **Monitoring** : Prometheus, Grafana, Loki
+- **Infrastructure** : Docker
+
+---
+
+## 📸 Aperçu de l'application
+
+### Page d'accueil
+
+<img width="1920" height="5057" alt="image" src="https://github.com/user-attachments/assets/32be9995-80a8-4e66-b598-32ba942e693a" />
+
+### Catalogue des road trips
+
+<img width="1920" height="5057" alt="image" src="https://github.com/user-attachments/assets/e3f3b02f-53c6-47d4-a2e7-e082ee3ed65f" />
+
+### Assistant IA
+
+L'application intègre un assistant intelligent capable de générer automatiquement des itinéraires de voyage personnalisés en fonction de la destination, de la durée et du budget.
+
+<img width="2560" height="1761" alt="image" src="https://github.com/user-attachments/assets/ca52eb99-f176-486a-bed2-a61bfbc8e487" />
+
+Les utilisateurs peuvent ensuite exporter l’itinéraire détaillé au format PDF.
+
+<img width="598" height="839" alt="image" src="https://github.com/user-attachments/assets/2811d2de-7c84-4b5e-ad9b-65e9713d2e06" />
 
 ---
 
@@ -88,8 +141,8 @@ Frontend (Next.js)          Monitoring Stack
 
 ```bash
 # 1. Cloner le projet
-git clone <repository>
-cd Roadtrip
+git clone https://github.com/Plouski/RoadTrip
+cd RoadTrip
 
 # 2. Configurer l'environnement global
 cp .env.example .env
@@ -322,11 +375,11 @@ CLIENT_URL=http://localhost:3000
 CORS_ORIGIN=http://localhost:3000
 
 # DATABASE CONFIGURATION
-MONGODB_URI=mongodb+srv://admin:password123@cluster0.f5kut.mongodb.net/roadtrip?retryWrites=true&w=majority&appName=Cluster0
+MONGODB_URI=your-mongodb-uri
 
 # JWT CONFIGURATION (PARTAGÉ ENTRE TOUS LES SERVICES)
-JWT_SECRET=roadTripTopSecret2024ChangeInProduction
-JWT_REFRESH_SECRET=refreshTopsecret2024ChangeInProduction
+JWT_SECRET=your-jwt-secret
+JWT_REFRESH_SECRET=your-refresh-jwt-secret
 JWT_EXPIRES_IN=24h
 JWT_REFRESH_EXPIRES_IN=7d
 
@@ -493,15 +546,10 @@ stripe logs tail
 
 ---
 
-## 🤝 Contribution
+## 🤝 Remarque
 
-### Workflow de Développement
-
-1. **Fork** le repository
-2. **Créer** une branche feature (`git checkout -b feature/amazing-feature`)
-3. **Commit** avec conventional commits (`git commit -m 'feat: add amazing feature'`)
-4. **Push** vers la branche (`git push origin feature/amazing-feature`)
-5. **Ouvrir** une Pull Request
+Projet personnel réalisé dans le cadre de mon Master 2.
+Le dépôt est public à des fins de démonstration technique.
 
 ---
 
@@ -510,4 +558,4 @@ stripe logs tail
 **Auteur** : Inès GERVAIS  
 **Projet** : M2 - Architecture Microservices  
 **Certification** : RNCP39583 - Expert en Développement Logiciel  
-**Technologies** : Node.js, Express, Next.js, MongoDB, Docker, Kubernetes, Prometheus
+**Technologies** : Node.js, Express, Next.js, MongoDB, Docker, Prometheus, Grafana, Loki
