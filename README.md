@@ -63,7 +63,7 @@ J’ai réalisé :
 
 ### Catalogue des road trips
 
-<img width="1920" height="5057" alt="image" src="https://github.com/user-attachments/assets/e3f3b02f-53c6-47d4-a2e7-e082ee3ed65f" />
+<img width="1920" height="2184" alt="image" src="https://github.com/user-attachments/assets/9bd2290a-b430-4b99-a849-0906b284de2c" />
 
 ### Assistant IA
 
